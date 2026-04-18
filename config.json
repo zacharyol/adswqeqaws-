@@ -1,5 +1,5 @@
 {
-  "showWarning": false,
+  "showWarning": true,
   "warningMessage": "⚠️ Script updated! Be careful using this.",
   "enableDownload": true
 }
