@@ -1,17 +1,23 @@
 javascript:(() => {
 
-const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json";
+const CONFIG_URLS = [
+    "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json",
+    "https://cdn.jsdelivr.net/gh/zacharyol/adswqeqaws-/config.json"
+];
 
 /* =========================
-   🎨 UI STYLES
+   🎨 STYLES
 ========================= */
 function injectStyles() {
+    if (document.getElementById("grabLauncherStyles")) return;
+
     const style = document.createElement("style");
+    style.id = "grabLauncherStyles";
     style.innerHTML = `
     #launcherOverlay {
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.92);
+        background: rgba(0,0,0,0.93);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -21,17 +27,17 @@ function injectStyles() {
     }
 
     #launcherBox {
-        width: 320px;
-        padding: 20px;
+        width: 340px;
+        padding: 22px;
         border-radius: 14px;
         background: #111;
         text-align: center;
-        box-shadow: 0 0 25px rgba(0,0,0,0.6);
+        box-shadow: 0 0 25px rgba(0,0,0,0.7);
     }
 
     #launcherLogo {
-        width: 60px;
-        height: 60px;
+        width: 64px;
+        height: 64px;
         margin-bottom: 10px;
     }
 
@@ -44,7 +50,7 @@ function injectStyles() {
     #launcherVersion {
         font-size: 12px;
         opacity: 0.7;
-        margin-bottom: 15px;
+        margin-bottom: 14px;
     }
 
     .loader {
@@ -82,9 +88,9 @@ function showSplash(config) {
         <div id="launcherBox">
             <img id="launcherLogo" src="${config.logoUrl || ""}">
             <div id="launcherTitle">Grab Launcher</div>
-            <div id="launcherVersion">${config.version || "v1.0.0"}</div>
+            <div id="launcherVersion">${config.version || "v0.0.0"}</div>
             <div class="loader"></div>
-            <div id="launcherMessage">${config.message || "Loading..."}</div>
+            <div id="launcherMessage">${config.message || "Checking updates..."}</div>
         </div>
     `;
 
@@ -93,82 +99,92 @@ function showSplash(config) {
 }
 
 /* =========================
-   📦 CONFIG LOADER
+   📦 CONFIG LOADER (FIXED CACHE SAFE)
 ========================= */
 async function getConfig() {
-    try {
-        const res = await fetch(CONFIG_URL + "?t=" + Date.now());
-        return await res.json();
-    } catch (e) {
-        console.log("Config load failed:", e);
-        return {
-            version: "v0.0.0",
-            showWarning: false,
-            warningMessage: "",
-            scriptUrl: "",
-            logoUrl: ""
-        };
+    for (const url of CONFIG_URLS) {
+        try {
+            const res = await fetch(
+                url + "?v=" + Date.now() + "&r=" + Math.random(),
+                { cache: "no-store" }
+            );
+
+            const text = await res.text();
+            const json = JSON.parse(text);
+
+            if (json && json.version) {
+                console.log("CONFIG LOADED FROM:", url);
+                return json;
+            }
+
+        } catch (e) {
+            console.log("Config failed:", url, e);
+        }
     }
+
+    return {
+        version: "v0.0.0",
+        showWarning: false,
+        warningMessage: "",
+        scriptUrl: "",
+        logoUrl: "",
+        message: "Offline mode"
+    };
 }
 
 /* =========================
-   ⚡ SAFE SCRIPT LOADER
+   ⚡ SCRIPT LOADER (HOT RELOAD)
 ========================= */
 function loadExternalScript(url) {
     return new Promise((resolve, reject) => {
         if (!url) return resolve();
 
         const s = document.createElement("script");
-        s.src = url + "?t=" + Date.now();
-        s.onload = () => resolve();
-        s.onerror = () => reject("Script failed");
+        s.src = url + "?v=" + Date.now();
+        s.onload = resolve;
+        s.onerror = reject;
         document.head.appendChild(s);
     });
 }
 
 /* =========================
-   🔄 HOT RELOAD SYSTEM
+   🔥 HOT RELOAD
 ========================= */
 async function hotReload(config) {
     if (config.scriptUrl) {
         try {
             await loadExternalScript(config.scriptUrl);
-            console.log("🔥 Script hot-reloaded");
+            console.log("🔥 External script loaded");
         } catch (e) {
-            console.log("Hot reload error:", e);
+            console.log("Script load failed:", e);
         }
     }
 }
 
 /* =========================
-   🚀 MAIN
+   🚀 MAIN LAUNCHER FLOW
 ========================= */
 (async () => {
 
     injectStyles();
 
-    // STEP 1: splash immediately (guaranteed)
+    // STEP 1: splash instantly
     const config = await getConfig();
     const splash = showSplash(config);
 
     console.log("CONFIG:", config);
 
-    // STEP 2: optional warning logic
-    if (config.showWarning && config.warningMessage) {
-        console.warn("⚠️ Warning:", config.warningMessage);
-    }
+    // STEP 2: small loader delay (feel like real launcher)
+    await new Promise(r => setTimeout(r, 1000));
 
-    // STEP 3: wait a bit for “launcher feel”
-    await new Promise(r => setTimeout(r, 1200));
-
-    // STEP 4: hot load external script
+    // STEP 3: hot reload external script
     await hotReload(config);
 
-    // STEP 5: site validation (your original logic)
+    // STEP 4: site validation
     if (location.hostname !== "grabvr.quest") {
         splash.innerHTML = `
             <div id="launcherBox">
-                <div id="launcherTitle">Wrong Site</div>
+                <div id="launcherTitle">Invalid Site</div>
                 <div id="launcherMessage">Use this on grabvr.quest</div>
             </div>
         `;
@@ -212,7 +228,7 @@ async function hotReload(config) {
         const data = await res.json();
 
         const downloadNumber = extractDownloadNumber(data, userid, levelid);
-        if (!downloadNumber) throw new Error("No download number");
+        if (!downloadNumber) throw new Error("Missing download number");
 
         const blob = await downloadLevelFile(userid, levelid, downloadNumber);
 
