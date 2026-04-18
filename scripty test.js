@@ -14,6 +14,7 @@ async function getConfig() {
 function showWarning(message) {
     const box = document.createElement("div");
     box.textContent = message;
+
     Object.assign(box.style, {
         position: "fixed",
         bottom: "20px",
@@ -23,12 +24,15 @@ function showWarning(message) {
         color: "#fff",
         padding: "12px 20px",
         borderRadius: "8px",
-        zIndex: 9999,
-        fontWeight: "bold"
+        zIndex: "999999999",
+        fontSize: "16px",
+        fontWeight: "bold",
+        boxShadow: "0 0 10px rgba(0,0,0,0.5)"
     });
 
-    document.body.appendChild(box);
-    setTimeout(() => box.remove(), 4000);
+    document.documentElement.appendChild(box);
+
+    setTimeout(() => box.remove(), 5000);
 }
 
 (async () => {
