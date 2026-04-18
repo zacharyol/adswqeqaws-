@@ -1,6 +1,6 @@
 javascript:(() => {
 
-const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json";
+const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json?nocache=" + Date.now();
 
 function showWarning(message) {
     const box = document.createElement("div");
