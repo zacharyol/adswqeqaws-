@@ -1,16 +1,13 @@
 javascript:(() => {
 
-const CONFIG_URLS = [
-  "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json",
-  "https://cdn.jsdelivr.net/gh/zacharyol/adswqeqaws-/config.json"
-];
+const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json";
 
 /* =========================
-   💀 GLOBAL RESET
+   💀 HARD RESET
 ========================= */
 function reset() {
-    document.getElementById("launcherOverlay")?.remove();
-    document.getElementById("warnScreen")?.remove();
+    document.getElementById("launcher")?.remove();
+    document.getElementById("warn")?.remove();
     document.querySelectorAll("script[data-launcher]").forEach(s => s.remove());
 }
 
@@ -18,15 +15,15 @@ function reset() {
    🎨 STYLES
 ========================= */
 function styles() {
-    if (document.getElementById("launcherStyle")) return;
+    if (document.getElementById("ls_style")) return;
 
     const s = document.createElement("style");
-    s.id = "launcherStyle";
+    s.id = "ls_style";
     s.innerHTML = `
-    #launcherOverlay {
+    #launcher {
         position: fixed;
         inset: 0;
-        background: #0a0a0a;
+        background: #0b0b0b;
         color: white;
         font-family: monospace;
         display: flex;
@@ -37,7 +34,7 @@ function styles() {
 
     #box {
         width: 420px;
-        padding: 16px;
+        padding: 14px;
         background: #111;
         border-radius: 10px;
     }
@@ -45,9 +42,9 @@ function styles() {
     #barOuter {
         height: 8px;
         background: #222;
-        margin-top: 10px;
         border-radius: 6px;
         overflow: hidden;
+        margin-top: 10px;
     }
 
     #barInner {
@@ -64,8 +61,8 @@ function styles() {
         margin-top: 10px;
     }
 
-    /* ⚠ WARNING */
-    #warnScreen {
+    /* ⚠ WARNING FLASH */
+    #warn {
         position: fixed;
         inset: 0;
         display: flex;
@@ -73,8 +70,10 @@ function styles() {
         align-items: center;
         font-family: monospace;
         font-size: 22px;
+        color: white;
+        background: black;
+        animation: flash 0.35s infinite alternate;
         z-index: 9999999999;
-        animation: flash 0.4s infinite alternate;
     }
 
     @keyframes flash {
@@ -86,39 +85,35 @@ function styles() {
 }
 
 /* =========================
-   📦 CONFIG (HARD FRESH)
+   📦 CONFIG (FORCED FRESH)
 ========================= */
 async function getConfig() {
 
     const bust = Date.now() + "_" + Math.random();
 
-    for (const url of CONFIG_URLS) {
-        try {
-            const res = await fetch(url + "?b=" + bust, {
-                cache: "no-store",
-                headers: {
-                    "Cache-Control": "no-cache"
-                }
-            });
+    try {
+        const res = await fetch(CONFIG_URL + "?b=" + bust, {
+            cache: "no-store",
+            headers: {
+                "Cache-Control": "no-cache"
+            }
+        });
 
-            const text = await res.text();
-            const json = JSON.parse(text);
+        const text = await res.text();
+        return JSON.parse(text);
 
-            if (json?.version) return structuredClone(json);
-
-        } catch {}
+    } catch (e) {
+        return {
+            version: "v0.0.0",
+            showWarning: false,
+            warningMessage: "",
+            scriptUrl: ""
+        };
     }
-
-    return {
-        version: "v0.0.0",
-        showWarning: false,
-        warningMessage: "",
-        scriptUrl: ""
-    };
 }
 
 /* =========================
-   ⚡ SCRIPT LOAD
+   ⚡ SCRIPT LOADER
 ========================= */
 function loadScript(url) {
     return new Promise(resolve => {
@@ -133,13 +128,13 @@ function loadScript(url) {
 }
 
 /* =========================
-   ⚠ WARNING (BLOCKING)
+   ⚠ WARNING (BLOCKING + FLASH)
 ========================= */
-function showWarning(msg) {
+function warning(msg) {
     return new Promise(resolve => {
 
         const w = document.createElement("div");
-        w.id = "warnScreen";
+        w.id = "warn";
         w.innerText = "⚠ " + msg;
 
         document.body.appendChild(w);
@@ -147,7 +142,7 @@ function showWarning(msg) {
         setTimeout(() => {
             w.remove();
             resolve();
-        }, 3500);
+        }, 3000);
     });
 }
 
@@ -156,10 +151,10 @@ function showWarning(msg) {
 ========================= */
 function ui() {
 
-    const box = document.createElement("div");
-    box.id = "launcherOverlay";
+    const el = document.createElement("div");
+    el.id = "launcher";
 
-    box.innerHTML = `
+    el.innerHTML = `
         <div id="box">
             <div>Launcher</div>
             <div id="status">Starting...</div>
@@ -172,12 +167,12 @@ function ui() {
         </div>
     `;
 
-    document.body.appendChild(box);
+    document.body.appendChild(el);
 
     return {
-        status: box.querySelector("#status"),
-        bar: box.querySelector("#barInner"),
-        log: box.querySelector("#log")
+        status: el.querySelector("#status"),
+        bar: el.querySelector("#barInner"),
+        log: el.querySelector("#log")
     };
 }
 
@@ -185,16 +180,23 @@ function ui() {
    📟 LOG
 ========================= */
 function logger(el) {
-    return (txt) => {
+    return (t) => {
         const d = document.createElement("div");
-        d.innerText = "» " + txt;
+        d.innerText = "» " + t;
         el.appendChild(d);
         el.scrollTop = el.scrollHeight;
     };
 }
 
 /* =========================
-   🚀 MAIN STATE MACHINE
+   🎲 RANDOM SPEED
+========================= */
+function speed() {
+    return [150, 220, 300, 400, 550][Math.floor(Math.random() * 5)];
+}
+
+/* =========================
+   🚀 MAIN
 ========================= */
 (async () => {
 
@@ -203,17 +205,17 @@ function logger(el) {
 
     const config = await getConfig();
 
-    // 🔥 WARNING MUST BLOCK EVERYTHING
+    /* =========================
+       ⚠ WARNING (FIXED)
+    ========================= */
     if (config.showWarning) {
-        await showWarning(config.warningMessage);
+        await warning(config.warningMessage);
     }
 
     const UI = ui();
     const log = logger(UI.log);
 
-    function bar(p) {
-        UI.bar.style.width = p + "%";
-    }
+    const bar = (p) => UI.bar.style.width = p + "%";
 
     /* =========================
        BOOT FLOW
@@ -222,24 +224,22 @@ function logger(el) {
     UI.status.innerText = "Connecting...";
     log("Connecting...");
     bar(10);
-
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, speed()));
 
     log("Fetching config...");
     bar(30);
+    await new Promise(r => setTimeout(r, speed()));
 
-    await new Promise(r => setTimeout(r, 400));
-
-    log("Validating version: " + config.version);
+    log("Version: " + config.version);
     bar(50);
 
     await loadScript(config.scriptUrl);
 
-    log("Modules injected");
+    log("Modules loaded");
     bar(70);
+    await new Promise(r => setTimeout(r, speed()));
 
     const level = new URLSearchParams(location.search).get("level");
-
     if (!level) {
         log("No level found");
         return;
