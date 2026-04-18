@@ -1,5 +1,5 @@
 {
-  "showWarning": false,
+  "showWarning": true,
   "warningMessage": "DOWNLOADING IS CURRENTLY DISABLED AS THERE IS A UPDATE FOR GRAB PATCHING THIS METHOD FOR A WHILE",
   "version": "v1.0.1",
   "scriptUrl": "",
