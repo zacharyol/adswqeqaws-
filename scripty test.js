@@ -6,91 +6,74 @@ const CONFIG_URLS = [
 ];
 
 /* =========================
-   💀 HARD RESET (ALWAYS CLEAN)
+   💀 GLOBAL RESET
 ========================= */
-function hardReset() {
+function reset() {
     document.getElementById("launcherOverlay")?.remove();
-    document.getElementById("grabLauncherStyles")?.remove();
-    document.querySelectorAll("script[data-grab]").forEach(s => s.remove());
+    document.getElementById("warnScreen")?.remove();
+    document.querySelectorAll("script[data-launcher]").forEach(s => s.remove());
 }
 
 /* =========================
-   🎨 STYLES (WARNING FLASH INCLUDED)
+   🎨 STYLES
 ========================= */
-function injectStyles() {
-    const style = document.createElement("style");
-    style.id = "grabLauncherStyles";
-    style.innerHTML = `
+function styles() {
+    if (document.getElementById("launcherStyle")) return;
+
+    const s = document.createElement("style");
+    s.id = "launcherStyle";
+    s.innerHTML = `
     #launcherOverlay {
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.96);
+        background: #0a0a0a;
+        color: white;
+        font-family: monospace;
         display: flex;
         justify-content: center;
         align-items: center;
-        z-index: 2147483647;
-        font-family: monospace;
-        color: white;
+        z-index: 999999999;
     }
 
-    #launcherBox {
-        width: 430px;
+    #box {
+        width: 420px;
         padding: 16px;
-        border-radius: 12px;
-        background: #0c0c0c;
-        box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        background: #111;
+        border-radius: 10px;
     }
 
-    #title { font-size: 16px; font-weight: bold; }
-    #version { font-size: 11px; opacity: 0.6; margin-bottom: 10px; }
-
-    #progressOuter {
-        width: 100%;
+    #barOuter {
         height: 8px;
         background: #222;
+        margin-top: 10px;
         border-radius: 6px;
         overflow: hidden;
-        margin-bottom: 10px;
     }
 
-    #progressInner {
-        width: 0%;
+    #barInner {
         height: 100%;
-        background: linear-gradient(90deg,#fff,#777);
-        transition: width 0.15s;
+        width: 0%;
+        background: white;
+        transition: width 0.2s;
     }
 
-    #console {
+    #log {
         height: 140px;
         overflow-y: auto;
         font-size: 12px;
-        background: #050505;
-        padding: 8px;
-        border-radius: 8px;
-        border: 1px solid #222;
+        margin-top: 10px;
     }
 
-    .line {
-        opacity: 0;
-        animation: fadeIn 0.2s forwards;
-    }
-
-    @keyframes fadeIn {
-        to { opacity: 1; }
-    }
-
-    /* ⚠ WARNING FLASH */
-    #warningScreen {
+    /* ⚠ WARNING */
+    #warnScreen {
         position: fixed;
         inset: 0;
-        display: none;
+        display: flex;
         justify-content: center;
         align-items: center;
         font-family: monospace;
-        font-size: 20px;
-        z-index: 999999999;
-        color: white;
-        background: black;
+        font-size: 22px;
+        z-index: 9999999999;
         animation: flash 0.4s infinite alternate;
     }
 
@@ -99,105 +82,50 @@ function injectStyles() {
         100% { background: red; color: black; }
     }
     `;
-    document.head.appendChild(style);
+    document.head.appendChild(s);
 }
 
 /* =========================
-   ⚠ WARNING SCREEN
-========================= */
-function showWarning(message) {
-
-    const warn = document.createElement("div");
-    warn.id = "warningScreen";
-    warn.innerText = "⚠ " + message;
-
-    document.body.appendChild(warn);
-    warn.style.display = "flex";
-
-    return warn;
-}
-
-/* =========================
-   🧱 UI
-========================= */
-function createUI(config) {
-
-    const overlay = document.createElement("div");
-    overlay.id = "launcherOverlay";
-
-    overlay.innerHTML = `
-        <div id="launcherBox">
-            <div id="title">Grab Launcher</div>
-            <div id="version">${config.version}</div>
-
-            <div id="progressOuter">
-                <div id="progressInner"></div>
-            </div>
-
-            <div id="console"></div>
-        </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    return {
-        bar: overlay.querySelector("#progressInner"),
-        console: overlay.querySelector("#console")
-    };
-}
-
-/* =========================
-   📟 LOGGER
-========================= */
-function logger(el) {
-
-    const log = (txt) => {
-        const div = document.createElement("div");
-        div.className = "line";
-        div.innerText = "» " + txt;
-        el.appendChild(div);
-        el.scrollTop = el.scrollHeight;
-    };
-
-    return { log };
-}
-
-/* =========================
-   📦 CONFIG (NO CACHE EVER)
+   📦 CONFIG (HARD FRESH)
 ========================= */
 async function getConfig() {
 
-    const bust = Date.now() + Math.random();
+    const bust = Date.now() + "_" + Math.random();
 
     for (const url of CONFIG_URLS) {
         try {
-            const res = await fetch(url + "?bust=" + bust, {
-                cache: "no-store"
+            const res = await fetch(url + "?b=" + bust, {
+                cache: "no-store",
+                headers: {
+                    "Cache-Control": "no-cache"
+                }
             });
 
-            const json = await res.json();
-            if (json?.version) return json;
+            const text = await res.text();
+            const json = JSON.parse(text);
+
+            if (json?.version) return structuredClone(json);
 
         } catch {}
     }
 
     return {
         version: "v0.0.0",
-        scriptUrl: "",
         showWarning: false,
-        warningMessage: ""
+        warningMessage: "",
+        scriptUrl: ""
     };
 }
 
 /* =========================
-   ⚡ SCRIPT LOADER
+   ⚡ SCRIPT LOAD
 ========================= */
 function loadScript(url) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
         if (!url) return resolve();
 
         const s = document.createElement("script");
-        s.dataset.grab = "1";
+        s.dataset.launcher = "1";
         s.src = url + "?v=" + Date.now();
         s.onload = resolve;
         document.head.appendChild(s);
@@ -205,111 +133,152 @@ function loadScript(url) {
 }
 
 /* =========================
-   🎲 RANDOM BOOT SPEED ENGINE
+   ⚠ WARNING (BLOCKING)
 ========================= */
-function randomDelay() {
-    const speeds = [
-        120, 180, 250, 320, 400, 550
-    ];
-    return speeds[Math.floor(Math.random() * speeds.length)];
+function showWarning(msg) {
+    return new Promise(resolve => {
+
+        const w = document.createElement("div");
+        w.id = "warnScreen";
+        w.innerText = "⚠ " + msg;
+
+        document.body.appendChild(w);
+
+        setTimeout(() => {
+            w.remove();
+            resolve();
+        }, 3500);
+    });
 }
 
 /* =========================
-   🚀 MAIN
+   🧱 UI
+========================= */
+function ui() {
+
+    const box = document.createElement("div");
+    box.id = "launcherOverlay";
+
+    box.innerHTML = `
+        <div id="box">
+            <div>Launcher</div>
+            <div id="status">Starting...</div>
+
+            <div id="barOuter">
+                <div id="barInner"></div>
+            </div>
+
+            <div id="log"></div>
+        </div>
+    `;
+
+    document.body.appendChild(box);
+
+    return {
+        status: box.querySelector("#status"),
+        bar: box.querySelector("#barInner"),
+        log: box.querySelector("#log")
+    };
+}
+
+/* =========================
+   📟 LOG
+========================= */
+function logger(el) {
+    return (txt) => {
+        const d = document.createElement("div");
+        d.innerText = "» " + txt;
+        el.appendChild(d);
+        el.scrollTop = el.scrollHeight;
+    };
+}
+
+/* =========================
+   🚀 MAIN STATE MACHINE
 ========================= */
 (async () => {
 
-    hardReset();
-    injectStyles();
+    reset();
+    styles();
 
     const config = await getConfig();
-    const ui = createUI(config);
-    const log = logger(ui.console);
 
-    const setBar = (p) => ui.bar.style.width = p + "%";
-
-    /* =========================
-       ⚠ WARNING SYSTEM
-    ========================= */
+    // 🔥 WARNING MUST BLOCK EVERYTHING
     if (config.showWarning) {
+        await showWarning(config.warningMessage);
+    }
 
-        const warn = showWarning(config.warningMessage);
+    const UI = ui();
+    const log = logger(UI.log);
 
-        await new Promise(r => setTimeout(r, 2500));
-
-        warn.remove();
+    function bar(p) {
+        UI.bar.style.width = p + "%";
     }
 
     /* =========================
-       🔥 BOOT SEQUENCE (RANDOM SPEED)
+       BOOT FLOW
     ========================= */
 
-    log.log("Connecting...");
-    setBar(10);
-    await new Promise(r => setTimeout(r, randomDelay()));
+    UI.status.innerText = "Connecting...";
+    log("Connecting...");
+    bar(10);
 
-    log.log("Fetching config...");
-    setBar(25);
-    await new Promise(r => setTimeout(r, randomDelay()));
+    await new Promise(r => setTimeout(r, 400));
 
-    log.log("Validating version...");
-    setBar(45);
-    await new Promise(r => setTimeout(r, randomDelay()));
+    log("Fetching config...");
+    bar(30);
 
-    log.log("Injecting modules...");
-    setBar(65);
+    await new Promise(r => setTimeout(r, 400));
+
+    log("Validating version: " + config.version);
+    bar(50);
 
     await loadScript(config.scriptUrl);
 
-    await new Promise(r => setTimeout(r, randomDelay()));
-
-    if (location.hostname !== "grabvr.quest") {
-        log.log("Invalid host");
-        return;
-    }
+    log("Modules injected");
+    bar(70);
 
     const level = new URLSearchParams(location.search).get("level");
+
     if (!level) {
-        log.log("No level found");
+        log("No level found");
         return;
     }
 
-    const [userid, levelid] = level.split(":");
+    const [uid, lid] = level.split(":");
 
-    log.log("Target locked: " + userid + ":" + levelid);
-
-    setBar(85);
-    await new Promise(r => setTimeout(r, randomDelay()));
+    log("Target: " + uid + ":" + lid);
+    bar(85);
 
     try {
 
         const res = await fetch(
-            `https://api.slin.dev/grab/v1/details/${userid}/${levelid}`
+            `https://api.slin.dev/grab/v1/details/${uid}/${lid}`
         );
 
         const data = await res.json();
-        log.log("Level data received");
 
         const num = data.data_key?.split(":").pop();
 
-        log.log("Downloading...");
+        log("Downloading...");
+        bar(95);
 
         const blob = await fetch(
-            `https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${num}`
+            `https://api.slin.dev/grab/v1/download/${uid}/${lid}/${num}`
         ).then(r => r.blob());
 
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `${levelid}.level`;
+        a.download = lid + ".level";
         document.body.appendChild(a);
         a.click();
         a.remove();
 
-        setBar(100);
-        log.log("Complete");
+        bar(100);
+        log("Complete");
 
     } catch (e) {
-        log.log("ERROR: " + e);
+        log("ERROR: " + e);
     }
 
 })();
