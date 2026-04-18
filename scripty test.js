@@ -1,9 +1,9 @@
 javascript:(() => {
 
-const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json";
+const CONFIG_API = "https://api.github.com/repos/zacharyol/adswqeqaws-/contents/config.json";
 
 /* =========================
-   💀 HARD RESET
+   💀 RESET EVERYTHING
 ========================= */
 function reset() {
     document.getElementById("launcher")?.remove();
@@ -85,38 +85,45 @@ function styles() {
 }
 
 /* =========================
-   📦 CONFIG (FORCED FRESH)
+   📦 CONFIG (NO CORS ISSUES)
 ========================= */
-async function getConfig() {
+function getConfig() {
+    return new Promise((resolve) => {
 
-    const bust = Date.now() + "_" + Math.random();
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", CONFIG_API);
 
-    try {
-        const res = await fetch(CONFIG_URL + "?b=" + bust, {
-            cache: "no-store",
-            headers: {
-                "Cache-Control": "no-cache"
+        xhr.onload = function () {
+            try {
+                const data = JSON.parse(xhr.responseText);
+                const json = JSON.parse(atob(data.content));
+                resolve(json);
+            } catch (e) {
+                resolve({
+                    version: "PARSE_ERROR",
+                    showWarning: false,
+                    warningMessage: ""
+                });
             }
-        });
-
-        const text = await res.text();
-        return JSON.parse(text);
-
-    } catch (e) {
-        return {
-            version: "v0.0.0",
-            showWarning: false,
-            warningMessage: "",
-            scriptUrl: ""
         };
-    }
+
+        xhr.onerror = function () {
+            resolve({
+                version: "NETWORK_ERROR",
+                showWarning: false,
+                warningMessage: ""
+            });
+        };
+
+        xhr.send();
+    });
 }
 
 /* =========================
    ⚡ SCRIPT LOADER
 ========================= */
 function loadScript(url) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         if (!url) return resolve();
 
         const s = document.createElement("script");
@@ -128,10 +135,10 @@ function loadScript(url) {
 }
 
 /* =========================
-   ⚠ WARNING (BLOCKING + FLASH)
+   ⚠ WARNING (BLOCKING)
 ========================= */
 function warning(msg) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
 
         const w = document.createElement("div");
         w.id = "warn";
@@ -189,10 +196,10 @@ function logger(el) {
 }
 
 /* =========================
-   🎲 RANDOM SPEED
+   🎲 SPEED
 ========================= */
 function speed() {
-    return [150, 220, 300, 400, 550][Math.floor(Math.random() * 5)];
+    return [120, 200, 280, 350, 500][Math.floor(Math.random() * 5)];
 }
 
 /* =========================
@@ -206,7 +213,7 @@ function speed() {
     const config = await getConfig();
 
     /* =========================
-       ⚠ WARNING (FIXED)
+       ⚠ WARNING (NOW WORKS)
     ========================= */
     if (config.showWarning) {
         await warning(config.warningMessage);
@@ -237,7 +244,6 @@ function speed() {
 
     log("Modules loaded");
     bar(70);
-    await new Promise(r => setTimeout(r, speed()));
 
     const level = new URLSearchParams(location.search).get("level");
     if (!level) {
