@@ -34,7 +34,7 @@ function showWarning(message) {
 
     setTimeout(() => box.remove(), 5000);
 }
-showWarning("TEST MESSAGE");
+
 (async () => {
 
 const config = await getConfig();
