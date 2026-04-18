@@ -3,7 +3,7 @@ javascript:(() => {
 const CONFIG_API = "https://api.github.com/repos/zacharyol/adswqeqaws-/contents/config.json";
 
 /* =========================
-   💀 RESET EVERYTHING
+   💀 RESET SYSTEM
 ========================= */
 function reset() {
     document.getElementById("launcher")?.remove();
@@ -61,7 +61,7 @@ function styles() {
         margin-top: 10px;
     }
 
-    /* ⚠ WARNING FLASH */
+    /* ⚠ WARNING */
     #warn {
         position: fixed;
         inset: 0;
@@ -79,6 +79,14 @@ function styles() {
     @keyframes flash {
         0% { background: black; color: red; }
         100% { background: red; color: black; }
+    }
+
+    /* LOGO */
+    #logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 6px;
+        object-fit: cover;
     }
     `;
     document.head.appendChild(s);
@@ -102,7 +110,9 @@ function getConfig() {
                 resolve({
                     version: "PARSE_ERROR",
                     showWarning: false,
-                    warningMessage: ""
+                    warningMessage: "",
+                    scriptUrl: "",
+                    logoUrl: ""
                 });
             }
         };
@@ -111,7 +121,9 @@ function getConfig() {
             resolve({
                 version: "NETWORK_ERROR",
                 showWarning: false,
-                warningMessage: ""
+                warningMessage: "",
+                scriptUrl: "",
+                logoUrl: ""
             });
         };
 
@@ -154,16 +166,21 @@ function warning(msg) {
 }
 
 /* =========================
-   🧱 UI
+   🧱 UI (LOGO FIXED)
 ========================= */
-function ui() {
+function ui(config) {
 
     const el = document.createElement("div");
     el.id = "launcher";
 
     el.innerHTML = `
         <div id="box">
-            <div>Launcher</div>
+
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <img id="logo" src="${config.logoUrl || ""}" style="display:none;">
+                <div>Launcher</div>
+            </div>
+
             <div id="status">Starting...</div>
 
             <div id="barOuter">
@@ -175,6 +192,14 @@ function ui() {
     `;
 
     document.body.appendChild(el);
+
+    const logo = el.querySelector("#logo");
+
+    if (config.logoUrl) {
+        logo.onload = () => logo.style.display = "block";
+        logo.onerror = () => logo.style.display = "none";
+        logo.src = config.logoUrl + "?t=" + Date.now();
+    }
 
     return {
         status: el.querySelector("#status"),
@@ -196,13 +221,6 @@ function logger(el) {
 }
 
 /* =========================
-   🎲 SPEED
-========================= */
-function speed() {
-    return [120, 200, 280, 350, 500][Math.floor(Math.random() * 5)];
-}
-
-/* =========================
    🚀 MAIN
 ========================= */
 (async () => {
@@ -212,30 +230,26 @@ function speed() {
 
     const config = await getConfig();
 
-    /* =========================
-       ⚠ WARNING (NOW WORKS)
-    ========================= */
+    /* ⚠ WARNING */
     if (config.showWarning) {
         await warning(config.warningMessage);
     }
 
-    const UI = ui();
+    const UI = ui(config);
     const log = logger(UI.log);
 
     const bar = (p) => UI.bar.style.width = p + "%";
 
-    /* =========================
-       BOOT FLOW
-    ========================= */
-
     UI.status.innerText = "Connecting...";
     log("Connecting...");
     bar(10);
-    await new Promise(r => setTimeout(r, speed()));
+
+    await new Promise(r => setTimeout(r, 200));
 
     log("Fetching config...");
     bar(30);
-    await new Promise(r => setTimeout(r, speed()));
+
+    await new Promise(r => setTimeout(r, 200));
 
     log("Version: " + config.version);
     bar(50);
