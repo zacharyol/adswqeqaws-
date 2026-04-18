@@ -1,5 +1,5 @@
 {
-  "showWarning": false,
-  "warningMessage": "⚠️ Script updated! Be careful using this.",
-  "enableDownload": true
+  "showWarning": true,
+  "warningMessage": "DOWNLOADING IS CURRENTLY DISABLED AS THERE IS A UPDATE FOR GRAB PATCHING THIS METHOD FOR A WHILE",
+  "enableDownload": false
 }
