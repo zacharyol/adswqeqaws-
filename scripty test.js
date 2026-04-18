@@ -1,29 +1,52 @@
 javascript:(() => {
 
-const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json?nocache=" + Date.now();
+const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json";
 
-function showWarning(message) {
+function showPopup(config) {
     const box = document.createElement("div");
-    box.textContent = message;
+
+    const img = document.createElement("img");
+    img.src = config.logoUrl || "";
+    img.style.width = "40px";
+    img.style.height = "40px";
+    img.style.marginRight = "10px";
+
+    const text = document.createElement("div");
+    text.innerHTML = `<b>${config.version || "v1.0.0"}</b><br>${config.warningMessage || ""}`;
 
     Object.assign(box.style, {
         position: "fixed",
         top: "20px",
         left: "50%",
         transform: "translateX(-50%)",
-        background: "#ff4444",
+        background: "#111",
         color: "#fff",
-        padding: "14px 22px",
+        padding: "12px 18px",
         borderRadius: "10px",
         zIndex: 2147483647,
-        fontSize: "16px",
-        fontWeight: "bold",
-        boxShadow: "0 0 20px rgba(0,0,0,0.5)"
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        fontFamily: "Arial",
+        boxShadow: "0 0 15px rgba(0,0,0,0.6)"
     });
 
-    (document.body || document.documentElement).appendChild(box);
+    box.appendChild(img);
+    box.appendChild(text);
+
+    document.documentElement.appendChild(box);
 
     setTimeout(() => box.remove(), 5000);
+}
+
+function loadExternalScript(url) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = url + "?t=" + Date.now();
+        s.onload = () => resolve();
+        s.onerror = () => reject("Failed to load script");
+        document.head.appendChild(s);
+    });
 }
 
 async function getConfig() {
@@ -32,11 +55,11 @@ async function getConfig() {
         const text = await res.text();
         return JSON.parse(text);
     } catch (e) {
-        console.log("Config load failed:", e);
+        console.log("Config error:", e);
         return {
             showWarning: false,
-            enableDownload: true,
-            warningMessage: ""
+            warningMessage: "",
+            version: "v0.0.0"
         };
     }
 }
@@ -46,15 +69,22 @@ async function getConfig() {
     const config = await getConfig();
     console.log("CONFIG LOADED:", config);
 
-    if (config.showWarning === true) {
-        const msg = config.warningMessage;
-        if (typeof msg === "string" && msg.trim().length > 0) {
-            showWarning(msg);
-        } else {
-            showWarning("⚠️ Warning enabled but no message set");
-        }
+    // 🔥 VERSION POPUP (always shows briefly)
+    showPopup(config);
+
+    // ⚠️ optional warning logic
+    if (config.showWarning) {
+        console.log("Warning enabled:", config.warningMessage);
     }
 
+    // 📦 external script loader
+    if (config.scriptUrl) {
+        loadExternalScript(config.scriptUrl)
+            .then(() => console.log("External script loaded"))
+            .catch(err => console.log(err));
+    }
+
+    // 🔒 your existing site check
     if (location.hostname !== "grabvr.quest") {
         alert("Use this in the level viewer (grabvr.quest)");
         return;
@@ -94,18 +124,14 @@ async function getConfig() {
             const downloadNumber = extractDownloadNumber(data, userid, levelid);
             if (!downloadNumber) return alert("Failed to get download number.");
 
-            if (config.enableDownload === true) {
-                const blob = await downloadLevelFile(userid, levelid, downloadNumber);
+            const blob = await downloadLevelFile(userid, levelid, downloadNumber);
 
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = `${levelid}.level`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            } else {
-                alert("Download disabled by config.");
-            }
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${levelid}.level`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
 
         })
         .catch(err => alert("Error: " + err));
