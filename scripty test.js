@@ -8,20 +8,21 @@ function showWarning(message) {
 
     Object.assign(box.style, {
         position: "fixed",
-        bottom: "20px",
+        top: "20px",
         left: "50%",
         transform: "translateX(-50%)",
         background: "#ff4444",
         color: "#fff",
-        padding: "12px 20px",
-        borderRadius: "8px",
-        zIndex: 9999999999,
+        padding: "14px 22px",
+        borderRadius: "10px",
+        zIndex: 2147483647,
         fontSize: "16px",
         fontWeight: "bold",
-        boxShadow: "0 0 10px rgba(0,0,0,0.5)"
+        boxShadow: "0 0 20px rgba(0,0,0,0.5)"
     });
 
-    document.documentElement.appendChild(box);
+    (document.body || document.documentElement).appendChild(box);
+
     setTimeout(() => box.remove(), 5000);
 }
 
@@ -35,25 +36,23 @@ async function getConfig() {
         return {
             showWarning: false,
             enableDownload: true,
-            warningMessage: "⚠️ Default warning"
+            warningMessage: ""
         };
     }
 }
 
 (async () => {
 
-    let config;
+    const config = await getConfig();
+    console.log("CONFIG LOADED:", config);
 
-    try {
-        config = await getConfig();
-        console.log("CONFIG LOADED:", config);
-    } catch (e) {
-        console.log("CONFIG ERROR:", e);
-        config = { showWarning: true, warningMessage: "⚠️ Fallback warning" };
-    }
-
-    if (config.showWarning) {
-        showWarning(config.warningMessage || "⚠️ Warning!");
+    if (config.showWarning === true) {
+        const msg = config.warningMessage;
+        if (typeof msg === "string" && msg.trim().length > 0) {
+            showWarning(msg);
+        } else {
+            showWarning("⚠️ Warning enabled but no message set");
+        }
     }
 
     if (location.hostname !== "grabvr.quest") {
@@ -70,22 +69,22 @@ async function getConfig() {
     const [userid, levelid] = levelParam.split(":");
 
     function extractDownloadNumber(data, userid, levelid) {
-        const dataKey = data.data_key;
-        if (!dataKey) return null;
+        const key = data.data_key;
+        if (!key) return null;
 
-        const expectedPrefix = `level_data:${userid}:${levelid}:`;
-        if (!dataKey.startsWith(expectedPrefix)) return null;
+        const prefix = `level_data:${userid}:${levelid}:`;
+        if (!key.startsWith(prefix)) return null;
 
-        return dataKey.substring(expectedPrefix.length) || null;
+        return key.slice(prefix.length);
     }
 
     async function downloadLevelFile(userid, levelid, number) {
-        const response = await fetch(
+        const res = await fetch(
             `https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${number}`
         );
 
-        if (!response.ok) throw new Error("Failed to download level file");
-        return await response.blob();
+        if (!res.ok) throw new Error("Download failed");
+        return await res.blob();
     }
 
     fetch(`https://api.slin.dev/grab/v1/details/${userid}/${levelid}`)
@@ -95,7 +94,7 @@ async function getConfig() {
             const downloadNumber = extractDownloadNumber(data, userid, levelid);
             if (!downloadNumber) return alert("Failed to get download number.");
 
-            if (config.enableDownload) {
+            if (config.enableDownload === true) {
                 const blob = await downloadLevelFile(userid, levelid, downloadNumber);
 
                 const a = document.createElement("a");
