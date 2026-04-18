@@ -1,23 +1,42 @@
 javascript:(() => {
 
 const CONFIG_URLS = [
-    "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json",
-    "https://cdn.jsdelivr.net/gh/zacharyol/adswqeqaws-/config.json"
+  "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json",
+  "https://cdn.jsdelivr.net/gh/zacharyol/adswqeqaws-/config.json"
 ];
+
+/* =========================
+   💀 HARD RESET (IMPORTANT)
+   DESTROYS ALL OLD STATE
+========================= */
+function hardReset() {
+
+    // remove old launcher UI
+    document.getElementById("launcherOverlay")?.remove();
+
+    // remove old injected scripts
+    document.querySelectorAll("script[data-grab-launcher]").forEach(s => s.remove());
+
+    // clear old styles
+    document.getElementById("grabLauncherStyles")?.remove();
+
+    // force garbage break references
+    window.__GRAB_CONFIG__ = null;
+    window.__LAUNCHER_UI__ = null;
+
+}
 
 /* =========================
    🎨 STYLES
 ========================= */
 function injectStyles() {
-    if (document.getElementById("grabLauncherStyles")) return;
-
     const style = document.createElement("style");
     style.id = "grabLauncherStyles";
     style.innerHTML = `
     #launcherOverlay {
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.93);
+        background: rgba(0,0,0,0.95);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -27,12 +46,12 @@ function injectStyles() {
     }
 
     #launcherBox {
-        width: 340px;
+        width: 360px;
         padding: 22px;
         border-radius: 14px;
         background: #111;
         text-align: center;
-        box-shadow: 0 0 25px rgba(0,0,0,0.7);
+        box-shadow: 0 0 25px rgba(0,0,0,0.8);
     }
 
     #launcherLogo {
@@ -44,7 +63,6 @@ function injectStyles() {
     #launcherTitle {
         font-size: 18px;
         font-weight: bold;
-        margin-bottom: 6px;
     }
 
     #launcherVersion {
@@ -53,34 +71,35 @@ function injectStyles() {
         margin-bottom: 14px;
     }
 
-    .loader {
-        width: 28px;
-        height: 28px;
-        border: 3px solid #333;
-        border-top: 3px solid #fff;
-        border-radius: 50%;
-        margin: 0 auto;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    #launcherMessage {
-        margin-top: 12px;
+    #launcherStatus {
         font-size: 13px;
-        opacity: 0.8;
+        margin: 10px 0;
+        min-height: 18px;
+    }
+
+    #barOuter {
+        width: 100%;
+        height: 10px;
+        background: #222;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    #barInner {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg,#fff,#888);
+        transition: width 0.25s ease;
     }
     `;
     document.head.appendChild(style);
 }
 
 /* =========================
-   🧱 SPLASH SCREEN
+   🧱 UI
 ========================= */
-function showSplash(config) {
+function createUI(config) {
+
     const overlay = document.createElement("div");
     overlay.id = "launcherOverlay";
 
@@ -89,121 +108,133 @@ function showSplash(config) {
             <img id="launcherLogo" src="${config.logoUrl || ""}">
             <div id="launcherTitle">Grab Launcher</div>
             <div id="launcherVersion">${config.version || "v0.0.0"}</div>
-            <div class="loader"></div>
-            <div id="launcherMessage">${config.message || "Checking updates..."}</div>
+
+            <div id="launcherStatus">Starting...</div>
+
+            <div id="barOuter">
+                <div id="barInner"></div>
+            </div>
         </div>
     `;
 
     document.body.appendChild(overlay);
-    return overlay;
-}
-
-/* =========================
-   📦 CONFIG LOADER (FIXED CACHE SAFE)
-========================= */
-async function getConfig() {
-    for (const url of CONFIG_URLS) {
-        try {
-            const res = await fetch(
-                url + "?v=" + Date.now() + "&r=" + Math.random(),
-                { cache: "no-store" }
-            );
-
-            const text = await res.text();
-            const json = JSON.parse(text);
-
-            if (json && json.version) {
-                console.log("CONFIG LOADED FROM:", url);
-                return json;
-            }
-
-        } catch (e) {
-            console.log("Config failed:", url, e);
-        }
-    }
 
     return {
-        version: "v0.0.0",
-        showWarning: false,
-        warningMessage: "",
-        scriptUrl: "",
-        logoUrl: "",
-        message: "Offline mode"
+        overlay,
+        status: overlay.querySelector("#launcherStatus"),
+        bar: overlay.querySelector("#barInner")
     };
 }
 
 /* =========================
-   ⚡ SCRIPT LOADER (HOT RELOAD)
+   📊 STEP CONTROL
 ========================= */
-function loadExternalScript(url) {
+function step(ui, text, percent) {
+    ui.status.innerText = text;
+    ui.bar.style.width = percent + "%";
+}
+
+/* =========================
+   📦 CONFIG (FORCE FRESH)
+========================= */
+async function getConfig() {
+
+    const bust = Date.now() + "_" + Math.random();
+
+    for (const url of CONFIG_URLS) {
+        try {
+            const res = await fetch(url + "?bust=" + bust, {
+                cache: "no-store"
+            });
+
+            const text = await res.text();
+            const json = JSON.parse(text);
+
+            if (json?.version) {
+                window.__GRAB_CONFIG__ = json;
+                return structuredClone(json);
+            }
+
+        } catch (e) {}
+    }
+
+    return {
+        version: "v0.0.0",
+        scriptUrl: "",
+        logoUrl: ""
+    };
+}
+
+/* =========================
+   ⚡ SCRIPT LOADER (NO CACHE)
+========================= */
+function loadScript(url) {
     return new Promise((resolve, reject) => {
+
         if (!url) return resolve();
 
         const s = document.createElement("script");
-        s.src = url + "?v=" + Date.now();
+        s.dataset.grabLauncher = "true";
+        s.src = url + "?v=" + Date.now() + "&r=" + Math.random();
+
         s.onload = resolve;
         s.onerror = reject;
+
         document.head.appendChild(s);
     });
 }
 
 /* =========================
-   🔥 HOT RELOAD
-========================= */
-async function hotReload(config) {
-    if (config.scriptUrl) {
-        try {
-            await loadExternalScript(config.scriptUrl);
-            console.log("🔥 External script loaded");
-        } catch (e) {
-            console.log("Script load failed:", e);
-        }
-    }
-}
-
-/* =========================
-   🚀 MAIN LAUNCHER FLOW
+   🚀 MAIN BOOT
 ========================= */
 (async () => {
 
+    // 💀 ALWAYS HARD RESET FIRST
+    hardReset();
+
     injectStyles();
 
-    // STEP 1: splash instantly
     const config = await getConfig();
-    const splash = showSplash(config);
+    const ui = createUI(config);
 
-    console.log("CONFIG:", config);
+    window.__LAUNCHER_UI__ = ui;
 
-    // STEP 2: small loader delay (feel like real launcher)
-    await new Promise(r => setTimeout(r, 1000));
+    /* =========================
+       BOOT STEPS
+    ========================= */
 
-    // STEP 3: hot reload external script
-    await hotReload(config);
+    step(ui, "Connecting...", 10);
+    await new Promise(r => setTimeout(r, 400));
 
-    // STEP 4: site validation
+    step(ui, "Fetching config...", 30);
+    await new Promise(r => setTimeout(r, 400));
+
+    step(ui, "Validating version...", 55);
+    await new Promise(r => setTimeout(r, 400));
+
+    step(ui, "Injecting modules...", 75);
+
+    await loadScript(config.scriptUrl);
+
+    /* =========================
+       SITE CHECK
+    ========================= */
     if (location.hostname !== "grabvr.quest") {
-        splash.innerHTML = `
-            <div id="launcherBox">
-                <div id="launcherTitle">Invalid Site</div>
-                <div id="launcherMessage">Use this on grabvr.quest</div>
-            </div>
-        `;
+        step(ui, "Invalid site", 100);
+        ui.status.innerText = "Use this on grabvr.quest";
         return;
     }
 
     const levelParam = new URLSearchParams(location.search).get("level");
     if (!levelParam) {
-        splash.innerHTML = `
-            <div id="launcherBox">
-                <div id="launcherTitle">No Level Found</div>
-            </div>
-        `;
+        step(ui, "Error", 100);
+        ui.status.innerText = "No level found";
         return;
     }
 
     const [userid, levelid] = levelParam.split(":");
 
-    function extractDownloadNumber(data, userid, levelid) {
+    function extract(data) {
         const key = data.data_key;
         if (!key) return null;
 
@@ -213,24 +244,30 @@ async function hotReload(config) {
         return key.slice(prefix.length);
     }
 
-    async function downloadLevelFile(userid, levelid, number) {
+    async function download(userid, levelid, num) {
         const res = await fetch(
-            `https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${number}`
+            `https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${num}`
         );
         if (!res.ok) throw new Error("Download failed");
         return await res.blob();
     }
 
     try {
+
+        step(ui, "Loading level...", 85);
+
         const res = await fetch(
             `https://api.slin.dev/grab/v1/details/${userid}/${levelid}`
         );
+
         const data = await res.json();
 
-        const downloadNumber = extractDownloadNumber(data, userid, levelid);
-        if (!downloadNumber) throw new Error("Missing download number");
+        const num = extract(data);
+        if (!num) throw new Error("Missing download id");
 
-        const blob = await downloadLevelFile(userid, levelid, downloadNumber);
+        step(ui, "Downloading...", 95);
+
+        const blob = await download(userid, levelid, num);
 
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -239,22 +276,13 @@ async function hotReload(config) {
         a.click();
         a.remove();
 
-        splash.innerHTML = `
-            <div id="launcherBox">
-                <div id="launcherTitle">Success</div>
-                <div id="launcherMessage">Level downloaded</div>
-            </div>
-        `;
+        step(ui, "Complete", 100);
 
-        setTimeout(() => splash.remove(), 1500);
+        setTimeout(() => ui.overlay.remove(), 1000);
 
     } catch (err) {
-        splash.innerHTML = `
-            <div id="launcherBox">
-                <div id="launcherTitle">Error</div>
-                <div id="launcherMessage">${err}</div>
-            </div>
-        `;
+        step(ui, "Error", 100);
+        ui.status.innerText = err;
     }
 
 })();
