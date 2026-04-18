@@ -1,8 +1,8 @@
 {
   "showWarning": false,
   "warningMessage": "DOWNLOADING IS CURRENTLY DISABLED AS THERE IS A UPDATE FOR GRAB PATCHING THIS METHOD FOR A WHILE",
-  "enableDownload": true,
   "version": "v1.0.1",
-  "scriptUrl": ""
+  "enableDownload": true,
+  "scriptUrl": "",
   "logoUrl": "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/logo.png",
 }
