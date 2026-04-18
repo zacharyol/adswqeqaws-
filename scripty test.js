@@ -1,1 +1,95 @@
-javascript:(() => {    const CONFIG_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/config.json";    async function getConfig() {        try {            const res = await fetch(CONFIG_URL + "?t=" + Date.now()); // prevent caching            return await res.json();        } catch {            return { showWarning: false, enableDownload: true };        }    }    function showWarning(message) {        const box = document.createElement("div");        box.textContent = message;        Object.assign(box.style, {            position: "fixed",            bottom: "20px",            left: "50%",            transform: "translateX(-50%)",            background: "#ff4444",            color: "#fff",            padding: "12px 20px",            borderRadius: "8px",            zIndex: 9999,            fontWeight: "bold"        });        document.body.appendChild(box);        setTimeout(() => box.remove(), 4000);    }    (async () => {        const config = await getConfig();        // ===== WARNING CONTROLLED BY GITHUB =====        if (config.showWarning) {            showWarning(config.warningMessage || "⚠%EF%B8%8F Warning!");        }        if (location.hostname !== "grabvr.quest") {            alert("Use this in the level viewer (grabvr.quest)");            return;        }        const levelParam = new URLSearchParams(location.search).get("level");        if (!levelParam) {            alert("No level ID found in URL.");            return;        }        const [userid, levelid] = levelParam.split(":");        function extractDownloadNumber(data, userid, levelid) {            const dataKey = data.data_key;            if (!dataKey) return null;            const expectedPrefix = %60level_data:${userid}:${levelid}:%60;            if (!dataKey.startsWith(expectedPrefix)) return null;            return dataKey.substring(expectedPrefix.length) || null;        }        async function downloadLevelFile(userid, levelid, number) {            const response = await fetch(%60https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${number}%60);            if (!response.ok) throw new Error(%60Failed to download level file%60);            return await response.blob();        }        fetch(%60https://api.slin.dev/grab/v1/details/${userid}/${levelid}%60)            .then(res => res.json())            .then(async data => {                const downloadNumber = extractDownloadNumber(data, userid, levelid);                if (!downloadNumber) return alert("Failed to get download number.");                // ===== DOWNLOAD CONTROLLED BY GITHUB =====                if (config.enableDownload) {                    const blob = await downloadLevelFile(userid, levelid, downloadNumber);                    const a = document.createElement("a");                    a.href = URL.createObjectURL(blob);                    a.download = %60${levelid}.level%60;                    document.body.appendChild(a);                    a.click();                    a.remove();                } else {                    alert("Download disabled by config.");                }            })            .catch(err => alert("Error: " + err));    })();})();
+javascript:(() => {
+
+const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json";
+
+async function getConfig() {
+    try {
+        const res = await fetch(CONFIG_URL + "?t=" + Date.now());
+        return await res.json();
+    } catch {
+        return { showWarning: false, enableDownload: true };
+    }
+}
+
+function showWarning(message) {
+    const box = document.createElement("div");
+    box.textContent = message;
+    Object.assign(box.style, {
+        position: "fixed",
+        bottom: "20px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        background: "#ff4444",
+        color: "#fff",
+        padding: "12px 20px",
+        borderRadius: "8px",
+        zIndex: 9999,
+        fontWeight: "bold"
+    });
+
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 4000);
+}
+
+(async () => {
+
+const config = await getConfig();
+
+if (config.showWarning) {
+    showWarning(config.warningMessage || "⚠️ Warning!");
+}
+
+if (location.hostname !== "grabvr.quest") {
+    alert("Use this in the level viewer (grabvr.quest)");
+    return;
+}
+
+const levelParam = new URLSearchParams(location.search).get("level");
+if (!levelParam) {
+    alert("No level ID found in URL.");
+    return;
+}
+
+const [userid, levelid] = levelParam.split(":");
+
+function extractDownloadNumber(data, userid, levelid) {
+    const dataKey = data.data_key;
+    if (!dataKey) return null;
+
+    const expectedPrefix = `level_data:${userid}:${levelid}:`;
+    if (!dataKey.startsWith(expectedPrefix)) return null;
+
+    return dataKey.substring(expectedPrefix.length) || null;
+}
+
+async function downloadLevelFile(userid, levelid, number) {
+    const response = await fetch(`https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${number}`);
+    if (!response.ok) throw new Error("Failed to download level file");
+    return await response.blob();
+}
+
+fetch(`https://api.slin.dev/grab/v1/details/${userid}/${levelid}`)
+.then(res => res.json())
+.then(async data => {
+
+    const downloadNumber = extractDownloadNumber(data, userid, levelid);
+    if (!downloadNumber) return alert("Failed to get download number.");
+
+    if (config.enableDownload) {
+        const blob = await downloadLevelFile(userid, levelid, downloadNumber);
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${levelid}.level`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    } else {
+        alert("Download disabled by config.");
+    }
+
+})
+.catch(err => alert("Error: " + err));
+
+})();
+
+})();
