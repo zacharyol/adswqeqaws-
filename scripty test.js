@@ -2,97 +2,186 @@ javascript:(() => {
 
 const CONFIG_URL = "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/config.json";
 
-function showPopup(config) {
-    const box = document.createElement("div");
+/* =========================
+   🎨 UI STYLES
+========================= */
+function injectStyles() {
+    const style = document.createElement("style");
+    style.innerHTML = `
+    #launcherOverlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.92);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2147483647;
+        font-family: Arial;
+        color: white;
+    }
 
-    const img = document.createElement("img");
-    img.src = config.logoUrl || "";
-    img.style.width = "40px";
-    img.style.height = "40px";
-    img.style.marginRight = "10px";
+    #launcherBox {
+        width: 320px;
+        padding: 20px;
+        border-radius: 14px;
+        background: #111;
+        text-align: center;
+        box-shadow: 0 0 25px rgba(0,0,0,0.6);
+    }
 
-    const text = document.createElement("div");
-    text.innerHTML = `<b>${config.version || "v1.0.0"}</b><br>${config.warningMessage || ""}`;
+    #launcherLogo {
+        width: 60px;
+        height: 60px;
+        margin-bottom: 10px;
+    }
 
-    Object.assign(box.style, {
-        position: "fixed",
-        top: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        background: "#111",
-        color: "#fff",
-        padding: "12px 18px",
-        borderRadius: "10px",
-        zIndex: 2147483647,
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        fontFamily: "Arial",
-        boxShadow: "0 0 15px rgba(0,0,0,0.6)"
-    });
+    #launcherTitle {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 6px;
+    }
 
-    box.appendChild(img);
-    box.appendChild(text);
+    #launcherVersion {
+        font-size: 12px;
+        opacity: 0.7;
+        margin-bottom: 15px;
+    }
 
-    document.documentElement.appendChild(box);
+    .loader {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #333;
+        border-top: 3px solid #fff;
+        border-radius: 50%;
+        margin: 0 auto;
+        animation: spin 1s linear infinite;
+    }
 
-    setTimeout(() => box.remove(), 5000);
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    #launcherMessage {
+        margin-top: 12px;
+        font-size: 13px;
+        opacity: 0.8;
+    }
+    `;
+    document.head.appendChild(style);
 }
 
-function loadExternalScript(url) {
-    return new Promise((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = url + "?t=" + Date.now();
-        s.onload = () => resolve();
-        s.onerror = () => reject("Failed to load script");
-        document.head.appendChild(s);
-    });
+/* =========================
+   🧱 SPLASH SCREEN
+========================= */
+function showSplash(config) {
+    const overlay = document.createElement("div");
+    overlay.id = "launcherOverlay";
+
+    overlay.innerHTML = `
+        <div id="launcherBox">
+            <img id="launcherLogo" src="${config.logoUrl || ""}">
+            <div id="launcherTitle">Grab Launcher</div>
+            <div id="launcherVersion">${config.version || "v1.0.0"}</div>
+            <div class="loader"></div>
+            <div id="launcherMessage">${config.message || "Loading..."}</div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    return overlay;
 }
 
+/* =========================
+   📦 CONFIG LOADER
+========================= */
 async function getConfig() {
     try {
         const res = await fetch(CONFIG_URL + "?t=" + Date.now());
-        const text = await res.text();
-        return JSON.parse(text);
+        return await res.json();
     } catch (e) {
-        console.log("Config error:", e);
+        console.log("Config load failed:", e);
         return {
+            version: "v0.0.0",
             showWarning: false,
             warningMessage: "",
-            version: "v0.0.0"
+            scriptUrl: "",
+            logoUrl: ""
         };
     }
 }
 
+/* =========================
+   ⚡ SAFE SCRIPT LOADER
+========================= */
+function loadExternalScript(url) {
+    return new Promise((resolve, reject) => {
+        if (!url) return resolve();
+
+        const s = document.createElement("script");
+        s.src = url + "?t=" + Date.now();
+        s.onload = () => resolve();
+        s.onerror = () => reject("Script failed");
+        document.head.appendChild(s);
+    });
+}
+
+/* =========================
+   🔄 HOT RELOAD SYSTEM
+========================= */
+async function hotReload(config) {
+    if (config.scriptUrl) {
+        try {
+            await loadExternalScript(config.scriptUrl);
+            console.log("🔥 Script hot-reloaded");
+        } catch (e) {
+            console.log("Hot reload error:", e);
+        }
+    }
+}
+
+/* =========================
+   🚀 MAIN
+========================= */
 (async () => {
 
+    injectStyles();
+
+    // STEP 1: splash immediately (guaranteed)
     const config = await getConfig();
-    console.log("CONFIG LOADED:", config);
+    const splash = showSplash(config);
 
-    // 🔥 VERSION POPUP (always shows briefly)
-    showPopup(config);
+    console.log("CONFIG:", config);
 
-    // ⚠️ optional warning logic
-    if (config.showWarning) {
-        console.log("Warning enabled:", config.warningMessage);
+    // STEP 2: optional warning logic
+    if (config.showWarning && config.warningMessage) {
+        console.warn("⚠️ Warning:", config.warningMessage);
     }
 
-    // 📦 external script loader
-    if (config.scriptUrl) {
-        loadExternalScript(config.scriptUrl)
-            .then(() => console.log("External script loaded"))
-            .catch(err => console.log(err));
-    }
+    // STEP 3: wait a bit for “launcher feel”
+    await new Promise(r => setTimeout(r, 1200));
 
-    // 🔒 your existing site check
+    // STEP 4: hot load external script
+    await hotReload(config);
+
+    // STEP 5: site validation (your original logic)
     if (location.hostname !== "grabvr.quest") {
-        alert("Use this in the level viewer (grabvr.quest)");
+        splash.innerHTML = `
+            <div id="launcherBox">
+                <div id="launcherTitle">Wrong Site</div>
+                <div id="launcherMessage">Use this on grabvr.quest</div>
+            </div>
+        `;
         return;
     }
 
     const levelParam = new URLSearchParams(location.search).get("level");
     if (!levelParam) {
-        alert("No level ID found in URL.");
+        splash.innerHTML = `
+            <div id="launcherBox">
+                <div id="launcherTitle">No Level Found</div>
+            </div>
+        `;
         return;
     }
 
@@ -112,29 +201,45 @@ async function getConfig() {
         const res = await fetch(
             `https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${number}`
         );
-
         if (!res.ok) throw new Error("Download failed");
         return await res.blob();
     }
 
-    fetch(`https://api.slin.dev/grab/v1/details/${userid}/${levelid}`)
-        .then(res => res.json())
-        .then(async data => {
+    try {
+        const res = await fetch(
+            `https://api.slin.dev/grab/v1/details/${userid}/${levelid}`
+        );
+        const data = await res.json();
 
-            const downloadNumber = extractDownloadNumber(data, userid, levelid);
-            if (!downloadNumber) return alert("Failed to get download number.");
+        const downloadNumber = extractDownloadNumber(data, userid, levelid);
+        if (!downloadNumber) throw new Error("No download number");
 
-            const blob = await downloadLevelFile(userid, levelid, downloadNumber);
+        const blob = await downloadLevelFile(userid, levelid, downloadNumber);
 
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = `${levelid}.level`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${levelid}.level`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
 
-        })
-        .catch(err => alert("Error: " + err));
+        splash.innerHTML = `
+            <div id="launcherBox">
+                <div id="launcherTitle">Success</div>
+                <div id="launcherMessage">Level downloaded</div>
+            </div>
+        `;
+
+        setTimeout(() => splash.remove(), 1500);
+
+    } catch (err) {
+        splash.innerHTML = `
+            <div id="launcherBox">
+                <div id="launcherTitle">Error</div>
+                <div id="launcherMessage">${err}</div>
+            </div>
+        `;
+    }
 
 })();
 
