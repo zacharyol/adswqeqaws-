@@ -11,6 +11,10 @@
     {
       "name": "Download levels from user id +bulk",
       "url": "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/uid%20download.js"
+    },
+    {
+      "name": "Download versions of levels",
+      "url": "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/refs/heads/main/version%20downloader%20module.js"
     }
   ]
 }
