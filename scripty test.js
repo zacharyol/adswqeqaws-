@@ -1,19 +1,15 @@
-javascript:(() => {
+(() => {
 
 const CONFIG_API = "https://api.github.com/repos/zacharyol/adswqeqaws-/contents/config.json";
 
-/* =========================
-   💀 RESET
-========================= */
+/* RESET */
 function reset() {
     document.getElementById("launcher")?.remove();
     document.getElementById("warn")?.remove();
     document.querySelectorAll("script[data-launcher]").forEach(s => s.remove());
 }
 
-/* =========================
-   🎨 STYLES
-========================= */
+/* STYLES */
 function styles() {
     if (document.getElementById("ls_style")) return;
 
@@ -25,50 +21,50 @@ function styles() {
     #barOuter { height:8px; background:#222; border-radius:6px; overflow:hidden; margin-top:10px; }
     #barInner { height:100%; width:0%; background:white; transition:width .2s; }
     #log { height:120px; overflow-y:auto; font-size:12px; margin-top:10px; }
-    #warn { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; font-size:22px; animation:flash .3s infinite alternate; z-index:9999999999;}
-    @keyframes flash {0%{background:black;color:red;}100%{background:red;color:black;}}
-    button { margin-top:6px; width:100%; background:#222; color:white; border:none; padding:6px; cursor:pointer;}
-    textarea { width:100%; height:80px; background:#000; color:#0f0; margin-top:6px;}
+    #warn { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; font-size:22px; animation:flash .3s infinite alternate; z-index:9999999999; }
+    @keyframes flash { 0%{background:black;color:red;} 100%{background:red;color:black;} }
+    button { margin-top:6px; width:100%; background:#222; color:white; border:none; padding:6px; cursor:pointer; }
+    textarea { width:100%; height:80px; background:#000; color:#0f0; margin-top:6px; }
     `;
     document.head.appendChild(s);
 }
 
-/* =========================
-   📦 CONFIG
-========================= */
+/* CONFIG */
 function getConfig() {
     return new Promise(resolve => {
         const xhr = new XMLHttpRequest();
         xhr.open("GET", CONFIG_API);
+
         xhr.onload = () => {
             try {
                 const data = JSON.parse(xhr.responseText);
-                resolve(JSON.parse(atob(data.content)));
+                const json = JSON.parse(atob(data.content));
+                resolve(json);
             } catch {
                 resolve({});
             }
         };
+
         xhr.onerror = () => resolve({});
         xhr.send();
     });
 }
 
-/* =========================
-   ⚠ WARNING
-========================= */
+/* WARNING */
 function warning(msg) {
-    return new Promise(res => {
+    return new Promise(resolve => {
         const w = document.createElement("div");
         w.id = "warn";
         w.innerText = "⚠ " + msg;
         document.body.appendChild(w);
-        setTimeout(()=>{w.remove();res();},3000);
+        setTimeout(() => {
+            w.remove();
+            resolve();
+        }, 3000);
     });
 }
 
-/* =========================
-   💾 LOCAL MODULES
-========================= */
+/* LOCAL MODULES */
 function getLocalModules() {
     try {
         return JSON.parse(localStorage.getItem("launcher_modules")) || [];
@@ -79,20 +75,17 @@ function getLocalModules() {
 
 function saveLocalModule(code) {
     const mods = getLocalModules();
-    mods.push({ name: "Local " + (mods.length+1), code });
+    mods.push({ name: "Local " + (mods.length + 1), code });
     localStorage.setItem("launcher_modules", JSON.stringify(mods));
 }
 
-/* =========================
-   ⚡ RUN MODULE
-========================= */
+/* RUN MODULE */
 async function runModule(mod, ctx, log) {
-
     try {
-        log("▶ Running: " + mod.name);
+        log("▶ " + mod.name);
 
         if (mod.url) {
-            const code = await fetch(mod.url + "?t=" + Date.now()).then(r=>r.text());
+            const code = await fetch(mod.url + "?t=" + Date.now()).then(r => r.text());
             new Function("ctx", code)(ctx);
         }
 
@@ -100,34 +93,26 @@ async function runModule(mod, ctx, log) {
             new Function("ctx", mod.code)(ctx);
         }
 
-        log("✔ Done: " + mod.name);
+        log("✔ " + mod.name);
 
     } catch (e) {
         log("❌ " + mod.name + ": " + e.message);
     }
 }
 
-/* =========================
-   🧱 UI
-========================= */
+/* UI */
 function ui(config) {
-
     const el = document.createElement("div");
     el.id = "launcher";
 
     el.innerHTML = `
         <div id="box">
             <div>Launcher (${config.version || "?"})</div>
-
-            <div id="status">Loading...</div>
-
+            <div id="status">Ready</div>
             <div id="barOuter"><div id="barInner"></div></div>
-
             <div id="log"></div>
-
             <button id="runMods">Run Modules</button>
             <button id="addMod">Add Local Module</button>
-
             <textarea id="codeInput" placeholder="// paste JS module here"></textarea>
         </div>
     `;
@@ -135,8 +120,6 @@ function ui(config) {
     document.body.appendChild(el);
 
     return {
-        status: el.querySelector("#status"),
-        bar: el.querySelector("#barInner"),
         log: el.querySelector("#log"),
         runBtn: el.querySelector("#runMods"),
         addBtn: el.querySelector("#addMod"),
@@ -144,21 +127,17 @@ function ui(config) {
     };
 }
 
-/* =========================
-   📟 LOG
-========================= */
-function logger(el){
-    return t=>{
-        const d=document.createElement("div");
-        d.innerText="» "+t;
+/* LOGGER */
+function logger(el) {
+    return t => {
+        const d = document.createElement("div");
+        d.innerText = "» " + t;
         el.appendChild(d);
-        el.scrollTop=el.scrollHeight;
+        el.scrollTop = el.scrollHeight;
     };
 }
 
-/* =========================
-   🚀 MAIN
-========================= */
+/* MAIN */
 (async () => {
 
     reset();
@@ -173,14 +152,9 @@ function logger(el){
     const UI = ui(config);
     const log = logger(UI.log);
 
-    const ctx = {
-        log,
-        config,
-        page: window
-    };
+    const ctx = { log, config, page: window };
 
     UI.runBtn.onclick = async () => {
-
         const allMods = [
             ...(config.modules || []),
             ...getLocalModules()
@@ -198,9 +172,12 @@ function logger(el){
     UI.addBtn.onclick = () => {
         const code = UI.codeInput.value.trim();
         if (!code) return;
+
         saveLocalModule(code);
         log("Saved local module");
         UI.codeInput.value = "";
     };
+
+})();
 
 })();
