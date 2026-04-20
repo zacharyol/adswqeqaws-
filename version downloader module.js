@@ -1,18 +1,17 @@
-javascript:(() => {
+javascript:(async () => {
 
 const API = "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
 
 /* =========================
-   FETCH LEVELS
+   FETCH
 ========================= */
 async function getLevels(userId) {
     const res = await fetch(API + userId);
-    const data = await res.json();
-    return data.levels || [];
+    return await res.json(); // <-- ARRAY (NOT .levels)
 }
 
 /* =========================
-   PARSE LEVEL GROUPS
+   GROUP LEVELS
 ========================= */
 function group(levels) {
 
@@ -67,7 +66,7 @@ async function download(uid, lid, v, title) {
 /* =========================
    UI
 ========================= */
-function createUI(data) {
+function ui(data) {
 
     const panel = document.createElement("div");
 
@@ -86,7 +85,7 @@ function createUI(data) {
         borderRadius: "10px"
     });
 
-    panel.innerHTML = `<b>📦 Version Downloader</b><br><br>`;
+    panel.innerHTML = "<b>📦 Version Downloader</b><br><br>";
 
     Object.values(data).forEach(item => {
 
@@ -102,14 +101,13 @@ function createUI(data) {
 
         const drop = document.createElement("div");
         drop.style.display = "none";
-        drop.style.marginTop = "5px";
 
         btn.onclick = () => {
             drop.style.display = drop.style.display === "none" ? "block" : "none";
         };
 
         /* =========================
-           GENERATE ALL VERSIONS (DOWN TO 1)
+           VERSIONS DOWN TO 1
         ========================= */
         for (let v = item.maxVersion; v >= 1; v--) {
 
@@ -130,23 +128,8 @@ function createUI(data) {
             drop.appendChild(row);
         }
 
-        /* =========================
-           DOWNLOAD ALL
-        ========================= */
-        const all = document.createElement("button");
-        all.innerText = "Download ALL Versions";
-        all.style.width = "100%";
-
-        all.onclick = async () => {
-            for (let v = item.maxVersion; v >= 1; v--) {
-                await download(item.uid, item.lid, v, item.title);
-                await new Promise(r => setTimeout(r, 200));
-            }
-        };
-
         box.appendChild(btn);
         box.appendChild(drop);
-        box.appendChild(all);
 
         panel.appendChild(box);
     });
@@ -164,15 +147,16 @@ function createUI(data) {
 
     const levels = await getLevels(userId);
 
-    if (!levels.length) {
-        alert("No levels found");
+    console.log("RAW LEVELS:", levels);
+
+    if (!Array.isArray(levels) || levels.length === 0) {
+        alert("No levels found (check API)");
         return;
     }
 
     const grouped = group(levels);
 
-    createUI(grouped);
+    ui(grouped);
 
 })();
-
 })();
