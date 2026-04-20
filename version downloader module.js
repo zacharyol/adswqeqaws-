@@ -1,178 +1,206 @@
-javascript:(async () => {
+javascript:(() => {
 
-if (location.hostname !== "grabvr.quest") {
-    alert("Use this in grabvr.quest");
-    return;
-}
-
-/* =========================
-   CONFIG
-========================= */
-const API =
-"https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
-
-/* =========================
-   USER ID
-========================= */
-const userId = prompt("Enter User ID:");
-if (!userId) return;
+const API = "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
 
 /* =========================
    FETCH LEVELS
 ========================= */
-async function fetchLevels(uid) {
-    const res = await fetch(API + uid);
+async function getLevels(userId) {
+    const res = await fetch(API + userId);
     const data = await res.json();
-    return Array.isArray(data) ? data : data?.levels || [];
+    return data.levels || data || [];
 }
 
 /* =========================
-   HELPERS
+   GROUP LEVELS BY BASE ID
+   (THIS FIXES YOUR VERSION ISSUE)
 ========================= */
-function getVersion(dataKey) {
-    if (!dataKey) return "unknown";
-    return dataKey.split(":").pop();
-}
-
-/* =========================
-   GROUP BY LEVEL (identifier)
-========================= */
-function groupByLevel(levels) {
-
+function groupLevels(levels) {
     const map = {};
 
     for (const lvl of levels) {
+        if (!lvl.data_key) continue;
 
-        const id = lvl.identifier; // unique level
-        if (!map[id]) {
-            map[id] = {
-                title: lvl.title || "Unnamed",
-                entries: []
+        const parts = lvl.data_key.split(":");
+
+        const uid = parts[1];
+        const lid = parts[2];
+        const version = parts[3];
+
+        const baseKey = `${uid}:${lid}`;
+
+        if (!map[baseKey]) {
+            map[baseKey] = {
+                title: lvl.title || lid,
+                versions: []
             };
         }
 
-        map[id].entries.push(lvl);
+        map[baseKey].versions.push({
+            ...lvl,
+            version
+        });
+    }
+
+    // sort versions oldest → newest
+    for (const key in map) {
+        map[key].versions.sort((a, b) => Number(a.version) - Number(b.version));
     }
 
     return map;
 }
 
 /* =========================
-   DOWNLOAD
+   DOWNLOAD SINGLE VERSION
 ========================= */
-async function downloadLevel(lvl) {
+async function downloadVersion(lvl) {
 
-    const [uid, lid] = lvl.identifier.split(":");
-    const version = getVersion(lvl.data_key);
+    const parts = lvl.data_key.split(":");
+    const uid = parts[1];
+    const lid = parts[2];
+    const ver = parts[3];
 
-    const blob = await fetch(
-        `https://api.slin.dev/grab/v1/download/${uid}/${lid}/${version}`
-    ).then(r => r.blob());
+    const res = await fetch(
+        `https://api.slin.dev/grab/v1/download/${uid}/${lid}/${ver}`
+    );
+
+    if (!res.ok) {
+        alert("Download failed");
+        return;
+    }
+
+    const blob = await res.blob();
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${lvl.title || lid}_v${version}.level`;
+    a.download = `${lvl.title || lid}_v${ver}.level`;
+    document.body.appendChild(a);
     a.click();
     a.remove();
 }
 
 /* =========================
-   UI PANEL
+   UI CREATION
 ========================= */
-const panel = document.createElement("div");
-panel.style = `
-position:fixed;
-right:20px;
-top:80px;
-width:360px;
-max-height:500px;
-overflow:auto;
-background:#111;
-color:#fff;
-font-family:monospace;
-z-index:999999999;
-padding:10px;
-border-radius:8px;
-box-shadow:0 0 10px black;
-`;
+function createUI(groups) {
 
-panel.innerHTML = `<b>📁 Level Version Browser</b><br><br>`;
-document.body.appendChild(panel);
+    const panel = document.createElement("div");
+
+    Object.assign(panel.style, {
+        position: "fixed",
+        right: "20px",
+        top: "80px",
+        width: "360px",
+        maxHeight: "520px",
+        overflowY: "auto",
+        background: "#111",
+        color: "#fff",
+        fontFamily: "monospace",
+        padding: "10px",
+        zIndex: 999999999,
+        borderRadius: "10px",
+        boxShadow: "0 0 12px black"
+    });
+
+    panel.innerHTML = `<b>📦 Version Downloader</b><br><br>`;
+
+    for (const key in groups) {
+
+        const group = groups[key];
+
+        const box = document.createElement("div");
+        box.style.marginBottom = "10px";
+        box.style.background = "#222";
+        box.style.padding = "6px";
+        box.style.borderRadius = "6px";
+
+        const toggle = document.createElement("button");
+        toggle.innerText = group.title + " ▼";
+        toggle.style.width = "100%";
+
+        const dropdown = document.createElement("div");
+        dropdown.style.display = "none";
+        dropdown.style.marginTop = "6px";
+
+        toggle.onclick = () => {
+            dropdown.style.display =
+                dropdown.style.display === "none" ? "block" : "none";
+        };
+
+        /* =========================
+           VERSION LIST
+        ========================= */
+        group.versions.forEach(v => {
+
+            const row = document.createElement("div");
+            row.style.display = "flex";
+            row.style.justifyContent = "space-between";
+            row.style.alignItems = "center";
+            row.style.margin = "4px 0";
+            row.style.padding = "4px";
+            row.style.background = "#333";
+            row.style.borderRadius = "4px";
+
+            const ver = v.version;
+
+            const label = document.createElement("span");
+            label.innerText = "Version " + ver;
+
+            const btn = document.createElement("button");
+            btn.innerText = "Download";
+
+            btn.onclick = () => downloadVersion(v);
+
+            row.appendChild(label);
+            row.appendChild(btn);
+
+            dropdown.appendChild(row);
+        });
+
+        /* =========================
+           DOWNLOAD ALL
+        ========================= */
+        const allBtn = document.createElement("button");
+        allBtn.innerText = "⬇ Download All Versions";
+        allBtn.style.width = "100%";
+        allBtn.style.marginTop = "6px";
+
+        allBtn.onclick = async () => {
+            for (const v of group.versions) {
+                await downloadVersion(v);
+                await new Promise(r => setTimeout(r, 300));
+            }
+        };
+
+        box.appendChild(toggle);
+        box.appendChild(dropdown);
+        box.appendChild(allBtn);
+
+        panel.appendChild(box);
+    }
+
+    document.body.appendChild(panel);
+}
 
 /* =========================
    MAIN
 ========================= */
-const levels = await fetchLevels(userId);
+(async () => {
 
-if (!levels.length) {
-    panel.innerHTML += "❌ No levels found";
-    return;
-}
+    const userId = prompt("Enter User ID:");
+    if (!userId) return;
 
-const grouped = groupByLevel(levels);
+    const levels = await getLevels(userId);
 
-/* =========================
-   RENDER LEVELS
-========================= */
-Object.entries(grouped).forEach(([id, data]) => {
+    if (!levels.length) {
+        alert("No levels found");
+        return;
+    }
 
-    const container = document.createElement("div");
-    container.style = `
-        background:#222;
-        margin:6px 0;
-        border-radius:6px;
-        overflow:hidden;
-    `;
+    const grouped = groupLevels(levels);
 
-    /* ===== LEVEL BUTTON ===== */
-    const btn = document.createElement("div");
-    btn.style = `
-        padding:8px;
-        cursor:pointer;
-        font-weight:bold;
-    `;
-    btn.innerText = data.title + " ▼";
+    createUI(grouped);
 
-    /* ===== DROPDOWN ===== */
-    const dropdown = document.createElement("div");
-    dropdown.style = `
-        display:none;
-        padding:6px;
-        background:#1a1a1a;
-    `;
-
-    let open = false;
-
-    btn.onclick = () => {
-        open = !open;
-        dropdown.style.display = open ? "block" : "none";
-    };
-
-    /* ===== VERSION LIST ===== */
-    data.entries.forEach(lvl => {
-
-        const v = getVersion(lvl.data_key);
-
-        const row = document.createElement("div");
-        row.style = `
-            padding:6px;
-            margin:4px 0;
-            background:#333;
-            border-radius:4px;
-            cursor:pointer;
-            font-size:12px;
-        `;
-
-        row.innerText = "Version " + v;
-
-        row.onclick = () => downloadLevel(lvl);
-
-        dropdown.appendChild(row);
-    });
-
-    container.appendChild(btn);
-    container.appendChild(dropdown);
-    panel.appendChild(container);
-});
+})();
 
 })();
