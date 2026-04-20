@@ -3,7 +3,7 @@ javascript:(() => {
 const CONFIG_API = "https://api.github.com/repos/zacharyol/adswqeqaws-/contents/config.json";
 
 /* =========================
-   💀 RESET SYSTEM
+   💀 RESET
 ========================= */
 function reset() {
     document.getElementById("launcher")?.remove();
@@ -20,153 +20,95 @@ function styles() {
     const s = document.createElement("style");
     s.id = "ls_style";
     s.innerHTML = `
-    #launcher {
-        position: fixed;
-        inset: 0;
-        background: #0b0b0b;
-        color: white;
-        font-family: monospace;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 999999999;
-    }
-
-    #box {
-        width: 420px;
-        padding: 14px;
-        background: #111;
-        border-radius: 10px;
-    }
-
-    #barOuter {
-        height: 8px;
-        background: #222;
-        border-radius: 6px;
-        overflow: hidden;
-        margin-top: 10px;
-    }
-
-    #barInner {
-        height: 100%;
-        width: 0%;
-        background: white;
-        transition: width 0.2s;
-    }
-
-    #log {
-        height: 140px;
-        overflow-y: auto;
-        font-size: 12px;
-        margin-top: 10px;
-    }
-
-    /* ⚠ WARNING */
-    #warn {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-family: monospace;
-        font-size: 22px;
-        color: white;
-        background: black;
-        animation: flash 0.35s infinite alternate;
-        z-index: 9999999999;
-    }
-
-    @keyframes flash {
-        0% { background: black; color: red; }
-        100% { background: red; color: black; }
-    }
-
-    /* LOGO */
-    #logo {
-        width: 34px;
-        height: 34px;
-        border-radius: 6px;
-        object-fit: cover;
-    }
+    #launcher { position:fixed; inset:0; background:#0b0b0b; color:#fff; font-family:monospace; display:flex; justify-content:center; align-items:center; z-index:999999999; }
+    #box { width:420px; padding:14px; background:#111; border-radius:10px; }
+    #barOuter { height:8px; background:#222; border-radius:6px; overflow:hidden; margin-top:10px; }
+    #barInner { height:100%; width:0%; background:white; transition:width .2s; }
+    #log { height:120px; overflow-y:auto; font-size:12px; margin-top:10px; }
+    #warn { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; font-size:22px; animation:flash .3s infinite alternate; z-index:9999999999;}
+    @keyframes flash {0%{background:black;color:red;}100%{background:red;color:black;}}
+    button { margin-top:6px; width:100%; background:#222; color:white; border:none; padding:6px; cursor:pointer;}
+    textarea { width:100%; height:80px; background:#000; color:#0f0; margin-top:6px;}
     `;
     document.head.appendChild(s);
 }
 
 /* =========================
-   📦 CONFIG (NO CORS ISSUES)
+   📦 CONFIG
 ========================= */
 function getConfig() {
-    return new Promise((resolve) => {
-
+    return new Promise(resolve => {
         const xhr = new XMLHttpRequest();
         xhr.open("GET", CONFIG_API);
-
-        xhr.onload = function () {
+        xhr.onload = () => {
             try {
                 const data = JSON.parse(xhr.responseText);
-                const json = JSON.parse(atob(data.content));
-                resolve(json);
-            } catch (e) {
-                resolve({
-                    version: "PARSE_ERROR",
-                    showWarning: false,
-                    warningMessage: "",
-                    scriptUrl: "",
-                    logoUrl: ""
-                });
+                resolve(JSON.parse(atob(data.content)));
+            } catch {
+                resolve({});
             }
         };
-
-        xhr.onerror = function () {
-            resolve({
-                version: "NETWORK_ERROR",
-                showWarning: false,
-                warningMessage: "",
-                scriptUrl: "",
-                logoUrl: ""
-            });
-        };
-
+        xhr.onerror = () => resolve({});
         xhr.send();
     });
 }
 
 /* =========================
-   ⚡ SCRIPT LOADER
-========================= */
-function loadScript(url) {
-    return new Promise((resolve) => {
-        if (!url) return resolve();
-
-        const s = document.createElement("script");
-        s.dataset.launcher = "1";
-        s.src = url + "?v=" + Date.now();
-        s.onload = resolve;
-        document.head.appendChild(s);
-    });
-}
-
-/* =========================
-   ⚠ WARNING (BLOCKING)
+   ⚠ WARNING
 ========================= */
 function warning(msg) {
-    return new Promise((resolve) => {
-
+    return new Promise(res => {
         const w = document.createElement("div");
         w.id = "warn";
         w.innerText = "⚠ " + msg;
-
         document.body.appendChild(w);
-
-        setTimeout(() => {
-            w.remove();
-            resolve();
-        }, 3000);
+        setTimeout(()=>{w.remove();res();},3000);
     });
 }
 
 /* =========================
-   🧱 UI (LOGO FIXED)
+   💾 LOCAL MODULES
+========================= */
+function getLocalModules() {
+    try {
+        return JSON.parse(localStorage.getItem("launcher_modules")) || [];
+    } catch {
+        return [];
+    }
+}
+
+function saveLocalModule(code) {
+    const mods = getLocalModules();
+    mods.push({ name: "Local " + (mods.length+1), code });
+    localStorage.setItem("launcher_modules", JSON.stringify(mods));
+}
+
+/* =========================
+   ⚡ RUN MODULE
+========================= */
+async function runModule(mod, ctx, log) {
+
+    try {
+        log("▶ Running: " + mod.name);
+
+        if (mod.url) {
+            const code = await fetch(mod.url + "?t=" + Date.now()).then(r=>r.text());
+            new Function("ctx", code)(ctx);
+        }
+
+        if (mod.code) {
+            new Function("ctx", mod.code)(ctx);
+        }
+
+        log("✔ Done: " + mod.name);
+
+    } catch (e) {
+        log("❌ " + mod.name + ": " + e.message);
+    }
+}
+
+/* =========================
+   🧱 UI
 ========================= */
 function ui(config) {
 
@@ -175,48 +117,42 @@ function ui(config) {
 
     el.innerHTML = `
         <div id="box">
+            <div>Launcher (${config.version || "?"})</div>
 
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                <img id="logo" src="${config.logoUrl || ""}" style="display:none;">
-                <div>Launcher</div>
-            </div>
+            <div id="status">Loading...</div>
 
-            <div id="status">Starting...</div>
-
-            <div id="barOuter">
-                <div id="barInner"></div>
-            </div>
+            <div id="barOuter"><div id="barInner"></div></div>
 
             <div id="log"></div>
+
+            <button id="runMods">Run Modules</button>
+            <button id="addMod">Add Local Module</button>
+
+            <textarea id="codeInput" placeholder="// paste JS module here"></textarea>
         </div>
     `;
 
     document.body.appendChild(el);
 
-    const logo = el.querySelector("#logo");
-
-    if (config.logoUrl) {
-        logo.onload = () => logo.style.display = "block";
-        logo.onerror = () => logo.style.display = "none";
-        logo.src = config.logoUrl + "?t=" + Date.now();
-    }
-
     return {
         status: el.querySelector("#status"),
         bar: el.querySelector("#barInner"),
-        log: el.querySelector("#log")
+        log: el.querySelector("#log"),
+        runBtn: el.querySelector("#runMods"),
+        addBtn: el.querySelector("#addMod"),
+        codeInput: el.querySelector("#codeInput")
     };
 }
 
 /* =========================
    📟 LOG
 ========================= */
-function logger(el) {
-    return (t) => {
-        const d = document.createElement("div");
-        d.innerText = "» " + t;
+function logger(el){
+    return t=>{
+        const d=document.createElement("div");
+        d.innerText="» "+t;
         el.appendChild(d);
-        el.scrollTop = el.scrollHeight;
+        el.scrollTop=el.scrollHeight;
     };
 }
 
@@ -230,7 +166,6 @@ function logger(el) {
 
     const config = await getConfig();
 
-    /* ⚠ WARNING */
     if (config.showWarning) {
         await warning(config.warningMessage);
     }
@@ -238,69 +173,34 @@ function logger(el) {
     const UI = ui(config);
     const log = logger(UI.log);
 
-    const bar = (p) => UI.bar.style.width = p + "%";
+    const ctx = {
+        log,
+        config,
+        page: window
+    };
 
-    UI.status.innerText = "Connecting...";
-    log("Connecting...");
-    bar(10);
+    UI.runBtn.onclick = async () => {
 
-    await new Promise(r => setTimeout(r, 200));
+        const allMods = [
+            ...(config.modules || []),
+            ...getLocalModules()
+        ];
 
-    log("Fetching config...");
-    bar(30);
+        log("Running " + allMods.length + " modules...");
 
-    await new Promise(r => setTimeout(r, 200));
+        for (const m of allMods) {
+            await runModule(m, ctx, log);
+        }
 
-    log("Version: " + config.version);
-    bar(50);
+        log("All modules finished");
+    };
 
-    await loadScript(config.scriptUrl);
-
-    log("Modules loaded");
-    bar(70);
-
-    const level = new URLSearchParams(location.search).get("level");
-    if (!level) {
-        log("No level found");
-        return;
-    }
-
-    const [uid, lid] = level.split(":");
-
-    log("Target: " + uid + ":" + lid);
-    bar(85);
-
-    try {
-
-        const res = await fetch(
-            `https://api.slin.dev/grab/v1/details/${uid}/${lid}`
-        );
-
-        const data = await res.json();
-
-        const num = data.data_key?.split(":").pop();
-
-        log("Downloading...");
-        bar(95);
-
-        const blob = await fetch(
-            `https://api.slin.dev/grab/v1/download/${uid}/${lid}/${num}`
-        ).then(r => r.blob());
-
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = lid + ".level";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
-        bar(100);
-        log("Complete");
-
-    } catch (e) {
-        log("ERROR: " + e);
-    }
-
-})();
+    UI.addBtn.onclick = () => {
+        const code = UI.codeInput.value.trim();
+        if (!code) return;
+        saveLocalModule(code);
+        log("Saved local module");
+        UI.codeInput.value = "";
+    };
 
 })();
