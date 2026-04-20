@@ -12,7 +12,7 @@ const API =
 "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
 
 /* =========================
-   GET USER
+   USER ID
 ========================= */
 const userId = prompt("Enter User ID:");
 if (!userId) return;
@@ -27,33 +27,38 @@ async function fetchLevels(uid) {
 }
 
 /* =========================
-   EXTRACT VERSION
+   HELPERS
 ========================= */
-function getVersion(key) {
-    if (!key) return null;
-    return key.split(":").pop();
+function getVersion(dataKey) {
+    if (!dataKey) return "unknown";
+    return dataKey.split(":").pop();
 }
 
 /* =========================
-   GROUP BY VERSION
+   GROUP BY LEVEL (identifier)
 ========================= */
-function groupByVersion(levels) {
+function groupByLevel(levels) {
 
-    const groups = {};
+    const map = {};
 
     for (const lvl of levels) {
-        const v = getVersion(lvl.data_key);
-        if (!v) continue;
 
-        if (!groups[v]) groups[v] = [];
-        groups[v].push(lvl);
+        const id = lvl.identifier; // unique level
+        if (!map[id]) {
+            map[id] = {
+                title: lvl.title || "Unnamed",
+                entries: []
+            };
+        }
+
+        map[id].entries.push(lvl);
     }
 
-    return groups;
+    return map;
 }
 
 /* =========================
-   DOWNLOAD LEVEL
+   DOWNLOAD
 ========================= */
 async function downloadLevel(lvl) {
 
@@ -72,14 +77,14 @@ async function downloadLevel(lvl) {
 }
 
 /* =========================
-   UI
+   UI PANEL
 ========================= */
 const panel = document.createElement("div");
 panel.style = `
 position:fixed;
 right:20px;
 top:80px;
-width:340px;
+width:360px;
 max-height:500px;
 overflow:auto;
 background:#111;
@@ -91,80 +96,83 @@ border-radius:8px;
 box-shadow:0 0 10px black;
 `;
 
-panel.innerHTML = `<b>📦 Version Group Downloader</b><br><br>`;
+panel.innerHTML = `<b>📁 Level Version Browser</b><br><br>`;
 document.body.appendChild(panel);
 
 /* =========================
    MAIN
 ========================= */
 const levels = await fetchLevels(userId);
-const grouped = groupByVersion(levels);
 
-/* =========================
-   FILTER: ONLY versions with >1 level
-========================= */
-const validVersions = Object.entries(grouped)
-    .filter(([version, list]) => list.length > 1);
-
-/* =========================
-   NO VALID GROUPS
-========================= */
-if (!validVersions.length) {
-    panel.innerHTML += "❌ No version groups (need 2+ levels per version)";
+if (!levels.length) {
+    panel.innerHTML += "❌ No levels found";
     return;
 }
 
+const grouped = groupByLevel(levels);
+
 /* =========================
-   RENDER GROUPS
+   RENDER LEVELS
 ========================= */
-validVersions.forEach(([version, list]) => {
+Object.entries(grouped).forEach(([id, data]) => {
 
-    const group = document.createElement("div");
-    group.style = `
+    const container = document.createElement("div");
+    container.style = `
         background:#222;
-        margin:8px 0;
-        padding:6px;
+        margin:6px 0;
         border-radius:6px;
+        overflow:hidden;
     `;
 
-    group.innerHTML = `
-        <b>Version ${version}</b><br>
-        <small>${list.length} levels</small><br>
-        <button>⬇ Download Version</button>
+    /* ===== LEVEL BUTTON ===== */
+    const btn = document.createElement("div");
+    btn.style = `
+        padding:8px;
+        cursor:pointer;
+        font-weight:bold;
+    `;
+    btn.innerText = data.title + " ▼";
+
+    /* ===== DROPDOWN ===== */
+    const dropdown = document.createElement("div");
+    dropdown.style = `
+        display:none;
+        padding:6px;
+        background:#1a1a1a;
     `;
 
-    group.querySelector("button").onclick = async () => {
+    let open = false;
 
-        panel.innerHTML += `<br>Downloading version ${version}...<br>`;
-
-        for (const lvl of list) {
-            await downloadLevel(lvl);
-            await new Promise(r => setTimeout(r, 300));
-        }
-
-        panel.innerHTML += `Done version ${version}<br>`;
+    btn.onclick = () => {
+        open = !open;
+        dropdown.style.display = open ? "block" : "none";
     };
 
-    panel.appendChild(group);
+    /* ===== VERSION LIST ===== */
+    data.entries.forEach(lvl => {
+
+        const v = getVersion(lvl.data_key);
+
+        const row = document.createElement("div");
+        row.style = `
+            padding:6px;
+            margin:4px 0;
+            background:#333;
+            border-radius:4px;
+            cursor:pointer;
+            font-size:12px;
+        `;
+
+        row.innerText = "Version " + v;
+
+        row.onclick = () => downloadLevel(lvl);
+
+        dropdown.appendChild(row);
+    });
+
+    container.appendChild(btn);
+    container.appendChild(dropdown);
+    panel.appendChild(container);
 });
-
-/* =========================
-   BULK ALL VERSIONS
-========================= */
-const btn = document.createElement("button");
-btn.innerText = "⬇ Download ALL Versions";
-btn.style = "width:100%;margin-top:10px;padding:6px;";
-panel.appendChild(btn);
-
-btn.onclick = async () => {
-
-    for (const [, list] of validVersions) {
-        for (const lvl of list) {
-            await downloadLevel(lvl);
-        }
-    }
-
-    panel.innerHTML += "<br>✅ All versions downloaded";
-};
 
 })();
