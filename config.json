@@ -7,6 +7,10 @@
     {
       "name": "Download level",
       "url": "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/download%20module.js"
-    }
+    },
+    {
+      "name": "Download levels from user id +bulk",
+      "url": "https://raw.githubusercontent.com/zacharyol/adswqeqaws-/main/uid%20download"
+    },
   ]
 }
