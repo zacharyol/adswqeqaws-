@@ -1,20 +1,14 @@
-javascript:(() => {
-
-const CONFIG_API = "https://api.github.com/repos/zacharyol/adswqeqaws-/contents/config.json";
+(() => {
 
 /* =========================
    💀 RESET
 ========================= */
-function reset() {
-    document.getElementById("launcher")?.remove();
-}
+document.getElementById("launcher")?.remove();
 
 /* =========================
-   🎨 STYLES
+   🎨 STYLE
 ========================= */
-function styles() {
-    if (document.getElementById("ls_style")) return;
-
+if (!document.getElementById("ls_style")) {
     const s = document.createElement("style");
     s.id = "ls_style";
     s.innerHTML = `
@@ -30,23 +24,19 @@ function styles() {
         border-radius:10px;
         box-shadow:0 0 20px black;
     }
-
     #header {
         padding:10px;
         background:#111;
         cursor:move;
         border-bottom:1px solid #222;
     }
-
     #box { padding:10px; }
-
     .module {
         background:#1a1a1a;
         margin-top:6px;
         padding:6px;
         border-radius:6px;
     }
-
     button {
         margin-left:4px;
         background:#222;
@@ -55,240 +45,220 @@ function styles() {
         padding:4px;
         cursor:pointer;
     }
-
     textarea {
         width:100%;
         height:60px;
         background:#000;
         color:#0f0;
         margin-top:6px;
-    }
-    `;
+    }`;
     document.head.appendChild(s);
 }
 
 /* =========================
    📦 CONFIG
 ========================= */
+const CONFIG_API = "https://api.github.com/repos/zacharyol/adswqeqaws-/contents/config.json";
+
 function getConfig() {
     return new Promise(resolve => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("GET", CONFIG_API);
-        xhr.onload = () => {
+        const x = new XMLHttpRequest();
+        x.open("GET", CONFIG_API);
+        x.onload = () => {
             try {
-                const data = JSON.parse(xhr.responseText);
-                resolve(JSON.parse(atob(data.content)));
+                const d = JSON.parse(x.responseText);
+                resolve(JSON.parse(atob(d.content)));
             } catch { resolve({}); }
         };
-        xhr.onerror = () => resolve({});
-        xhr.send();
+        x.onerror = () => resolve({});
+        x.send();
     });
 }
 
 /* =========================
-   💾 LOCAL STORAGE
+   💾 STORAGE
 ========================= */
-function getLocalModules() {
-    try {
-        return JSON.parse(localStorage.getItem("launcher_modules")) || [];
-    } catch { return []; }
+function getLocal() {
+    try { return JSON.parse(localStorage.getItem("mods")) || []; }
+    catch { return []; }
+}
+function saveLocal(m) {
+    localStorage.setItem("mods", JSON.stringify(m));
 }
 
-function saveLocalModules(mods) {
-    localStorage.setItem("launcher_modules", JSON.stringify(mods));
+/* =========================
+   📟 LOG
+========================= */
+function logger(el){
+    return t=>{
+        const d=document.createElement("div");
+        d.innerText="» "+t;
+        el.appendChild(d);
+        el.scrollTop=el.scrollHeight;
+    };
 }
 
 /* =========================
    ⚡ RUN MODULE
 ========================= */
-async function runModule(mod, ctx, log) {
-    if (!mod.enabled) return;
+async function runModule(m, ctx, log) {
+    if (!m.enabled) return;
 
     try {
-        log("▶ " + mod.name);
+        log("▶ " + m.name);
 
-        if (mod.url) {
-            const code = await fetch(mod.url + "?t=" + Date.now()).then(r => r.text());
+        if (m.url) {
+            const code = await fetch(m.url + "?t=" + Date.now()).then(r=>r.text());
             new Function("ctx", code)(ctx);
         }
 
-        if (mod.code) {
-            new Function("ctx", mod.code)(ctx);
+        if (m.code) {
+            new Function("ctx", m.code)(ctx);
         }
 
-        log("✔ " + mod.name);
-
-    } catch (e) {
-        log("❌ " + mod.name + ": " + e.message);
+        log("✔ " + m.name);
+    } catch(e) {
+        log("❌ " + m.name + ": " + e.message);
     }
 }
 
 /* =========================
    🧱 UI
 ========================= */
-function ui(config) {
+function createUI(version){
 
     const el = document.createElement("div");
-    el.id = "launcher";
+    el.id="launcher";
 
-    el.innerHTML = `
-    <div id="header">Launcher (${config.version || "?"})</div>
+    el.innerHTML=`
+    <div id="header">Launcher (${version||"?"})</div>
     <div id="box">
-        <div id="modules"></div>
+        <div id="mods"></div>
 
         <button id="runAll">Run Enabled</button>
 
-        <textarea id="codeInput" placeholder="// module code"></textarea>
+        <textarea id="code"></textarea>
         <button id="add">Add Module</button>
 
         <div id="log" style="height:100px;overflow:auto;margin-top:6px;"></div>
-    </div>
-    `;
+    </div>`;
 
     document.body.appendChild(el);
 
     return {
         root: el,
-        modules: el.querySelector("#modules"),
+        header: el.querySelector("#header"),
+        mods: el.querySelector("#mods"),
         runAll: el.querySelector("#runAll"),
         add: el.querySelector("#add"),
-        code: el.querySelector("#codeInput"),
-        log: el.querySelector("#log"),
-        header: el.querySelector("#header")
+        code: el.querySelector("#code"),
+        log: el.querySelector("#log")
     };
 }
 
 /* =========================
-   📟 LOG
+   🎛 RENDER
 ========================= */
-function logger(el) {
-    return t => {
-        const d = document.createElement("div");
-        d.innerText = "» " + t;
-        el.appendChild(d);
-        el.scrollTop = el.scrollHeight;
-    };
-}
+function render(UI, mods, ctx, log){
 
-/* =========================
-   🎛 MODULE LIST
-========================= */
-function renderModules(UI, mods, ctx, log) {
+    UI.mods.innerHTML="";
 
-    UI.modules.innerHTML = "";
+    mods.forEach((m,i)=>{
 
-    mods.forEach((m, i) => {
+        const d=document.createElement("div");
+        d.className="module";
 
-        const div = document.createElement("div");
-        div.className = "module";
-
-        div.innerHTML = `
+        d.innerHTML=`
         <b>${m.name}</b>
         <div>
-            <button data-act="toggle">${m.enabled ? "ON" : "OFF"}</button>
-            <button data-act="run">Run</button>
-            <button data-act="rename">Rename</button>
-            ${m.local ? '<button data-act="delete">Delete</button>' : ''}
-        </div>
-        `;
+            <button data="toggle">${m.enabled?"ON":"OFF"}</button>
+            <button data="run">Run</button>
+            <button data="rename">Rename</button>
+            ${m.local?'<button data="delete">Delete</button>':''}
+        </div>`;
 
-        div.onclick = async (e) => {
-            const act = e.target.dataset.act;
-            if (!act) return;
+        d.onclick=async e=>{
+            const a=e.target.getAttribute("data");
+            if(!a) return;
 
-            if (act === "toggle") {
-                m.enabled = !m.enabled;
+            if(a==="toggle") m.enabled=!m.enabled;
+            if(a==="run") await runModule(m,ctx,log);
+            if(a==="rename"){
+                const n=prompt("Name:",m.name);
+                if(n) m.name=n;
+            }
+            if(a==="delete"){
+                mods.splice(i,1);
             }
 
-            if (act === "run") {
-                await runModule(m, ctx, log);
-            }
-
-            if (act === "rename") {
-                const name = prompt("New name:", m.name);
-                if (name) m.name = name;
-            }
-
-            if (act === "delete") {
-                mods.splice(i, 1);
-            }
-
-            saveLocalModules(mods.filter(x => x.local));
-            renderModules(UI, mods, ctx, log);
+            saveLocal(mods.filter(x=>x.local));
+            render(UI,mods,ctx,log);
         };
 
-        UI.modules.appendChild(div);
+        UI.mods.appendChild(d);
     });
 }
 
 /* =========================
    🖱 DRAG
 ========================= */
-function drag(el, handle) {
+function drag(el,handle){
     let x=0,y=0;
 
-    handle.onmousedown = e => {
-        x=e.clientX;
-        y=e.clientY;
+    handle.onmousedown=e=>{
+        x=e.clientX;y=e.clientY;
 
-        document.onmousemove = e2 => {
-            el.style.left = (el.offsetLeft + e2.clientX - x) + "px";
-            el.style.top = (el.offsetTop + e2.clientY - y) + "px";
-            x=e2.clientX;
-            y=e2.clientY;
+        document.onmousemove=e2=>{
+            el.style.left=(el.offsetLeft+e2.clientX-x)+"px";
+            el.style.top=(el.offsetTop+e2.clientY-y)+"px";
+            x=e2.clientX;y=e2.clientY;
         };
 
-        document.onmouseup = () => {
-            document.onmousemove = null;
-        };
+        document.onmouseup=()=>document.onmousemove=null;
     };
 }
 
 /* =========================
    🚀 MAIN
 ========================= */
-(async () => {
-
-    reset();
-    styles();
+(async()=>{
 
     const config = await getConfig();
 
-    const UI = ui(config);
+    const UI = createUI(config.version);
     const log = logger(UI.log);
 
     const ctx = { log, config, page: window };
 
     let mods = [
-        ...(config.modules || []).map(m => ({...m, enabled:true, local:false})),
-        ...getLocalModules().map(m => ({...m, local:true}))
+        ...(config.modules||[]).map(m=>({...m,enabled:true})),
+        ...getLocal().map(m=>({...m,local:true}))
     ];
 
-    renderModules(UI, mods, ctx, log);
+    render(UI,mods,ctx,log);
 
-    UI.runAll.onclick = async () => {
-        for (const m of mods) {
-            await runModule(m, ctx, log);
-        }
+    UI.runAll.onclick=async()=>{
+        for(const m of mods) await runModule(m,ctx,log);
     };
 
-    UI.add.onclick = () => {
-        const code = UI.code.value.trim();
-        if (!code) return;
+    UI.add.onclick=()=>{
+        const code=UI.code.value.trim();
+        if(!code) return;
 
-        const newMod = {
-            name: "Local " + Date.now(),
+        mods.push({
+            name:"Local "+Date.now(),
             code,
-            enabled: true,
-            local: true
-        };
+            enabled:true,
+            local:true
+        });
 
-        mods.push(newMod);
-        saveLocalModules(mods.filter(x => x.local));
-        renderModules(UI, mods, ctx, log);
-        UI.code.value = "";
+        saveLocal(mods.filter(x=>x.local));
+        render(UI,mods,ctx,log);
+        UI.code.value="";
     };
 
-    drag(UI.root, UI.header);
+    drag(UI.root,UI.header);
+
+})();
 
 })();
