@@ -1,88 +1,74 @@
 javascript:(() => {
 
-const API = "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
+const LIST_API = "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
+const DOWNLOAD_API = (u, l, v) =>
+    `https://api.slin.dev/grab/v1/download/${u}/${l}/${v}`;
 
 /* =========================
-   FETCH LEVELS
+   FETCH BASE LEVEL LIST
 ========================= */
 async function getLevels(userId) {
-    const res = await fetch(API + userId);
+    const res = await fetch(LIST_API + userId);
     const data = await res.json();
-    return data.levels || data || [];
+    return data.levels || [];
 }
 
 /* =========================
-   GROUP LEVELS BY BASE ID
-   (THIS FIXES YOUR VERSION ISSUE)
+   FIND MAX VERSION PER LEVEL
+   (we detect by scanning downwards)
 ========================= */
-function groupLevels(levels) {
-    const map = {};
+async function scanVersions(level) {
 
-    for (const lvl of levels) {
-        if (!lvl.data_key) continue;
-
-        const parts = lvl.data_key.split(":");
-
-        const uid = parts[1];
-        const lid = parts[2];
-        const version = parts[3];
-
-        const baseKey = `${uid}:${lid}`;
-
-        if (!map[baseKey]) {
-            map[baseKey] = {
-                title: lvl.title || lid,
-                versions: []
-            };
-        }
-
-        map[baseKey].versions.push({
-            ...lvl,
-            version
-        });
-    }
-
-    // sort versions oldest → newest
-    for (const key in map) {
-        map[key].versions.sort((a, b) => Number(a.version) - Number(b.version));
-    }
-
-    return map;
-}
-
-/* =========================
-   DOWNLOAD SINGLE VERSION
-========================= */
-async function downloadVersion(lvl) {
-
-    const parts = lvl.data_key.split(":");
+    const parts = level.data_key.split(":");
     const uid = parts[1];
     const lid = parts[2];
-    const ver = parts[3];
 
-    const res = await fetch(
-        `https://api.slin.dev/grab/v1/download/${uid}/${lid}/${ver}`
-    );
+    const versions = [];
 
-    if (!res.ok) {
-        alert("Download failed");
-        return;
+    // start from known version if exists
+    let v = Number(parts[3] || 10);
+
+    while (v > 0) {
+        try {
+            const res = await fetch(DOWNLOAD_API(uid, lid, v));
+
+            if (!res.ok) break;
+
+            versions.push({
+                version: v,
+                uid,
+                lid,
+                title: level.title
+            });
+
+        } catch {
+            break;
+        }
+
+        v--;
     }
 
+    return versions;
+}
+
+/* =========================
+   DOWNLOAD
+========================= */
+async function download(uid, lid, v, title) {
+
+    const res = await fetch(DOWNLOAD_API(uid, lid, v));
     const blob = await res.blob();
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${lvl.title || lid}_v${ver}.level`;
-    document.body.appendChild(a);
+    a.download = `${title}_v${v}.level`;
     a.click();
-    a.remove();
 }
 
 /* =========================
-   UI CREATION
+   UI
 ========================= */
-function createUI(groups) {
+function createUI(data) {
 
     const panel = document.createElement("div");
 
@@ -98,15 +84,12 @@ function createUI(groups) {
         fontFamily: "monospace",
         padding: "10px",
         zIndex: 999999999,
-        borderRadius: "10px",
-        boxShadow: "0 0 12px black"
+        borderRadius: "10px"
     });
 
-    panel.innerHTML = `<b>📦 Version Downloader</b><br><br>`;
+    panel.innerHTML = `<b>📦 Version Scanner</b><br><br>`;
 
-    for (const key in groups) {
-
-        const group = groups[key];
+    data.forEach(item => {
 
         const box = document.createElement("div");
         box.style.marginBottom = "10px";
@@ -114,70 +97,56 @@ function createUI(groups) {
         box.style.padding = "6px";
         box.style.borderRadius = "6px";
 
-        const toggle = document.createElement("button");
-        toggle.innerText = group.title + " ▼";
-        toggle.style.width = "100%";
+        const btn = document.createElement("button");
+        btn.innerText = item.title + " ▼";
+        btn.style.width = "100%";
 
-        const dropdown = document.createElement("div");
-        dropdown.style.display = "none";
-        dropdown.style.marginTop = "6px";
+        const drop = document.createElement("div");
+        drop.style.display = "none";
+        drop.style.marginTop = "5px";
 
-        toggle.onclick = () => {
-            dropdown.style.display =
-                dropdown.style.display === "none" ? "block" : "none";
+        btn.onclick = () => {
+            drop.style.display = drop.style.display === "none" ? "block" : "none";
         };
 
-        /* =========================
-           VERSION LIST
-        ========================= */
-        group.versions.forEach(v => {
+        const allBtn = document.createElement("button");
+        allBtn.innerText = "Download All Versions";
+        allBtn.style.width = "100%";
+
+        allBtn.onclick = async () => {
+            for (const v of item.versions) {
+                await download(v.uid, v.lid, v.version, item.title);
+                await new Promise(r => setTimeout(r, 250));
+            }
+        };
+
+        drop.appendChild(allBtn);
+
+        item.versions.forEach(v => {
 
             const row = document.createElement("div");
             row.style.display = "flex";
             row.style.justifyContent = "space-between";
-            row.style.alignItems = "center";
             row.style.margin = "4px 0";
-            row.style.padding = "4px";
-            row.style.background = "#333";
-            row.style.borderRadius = "4px";
-
-            const ver = v.version;
 
             const label = document.createElement("span");
-            label.innerText = "Version " + ver;
+            label.innerText = "Version " + v.version;
 
-            const btn = document.createElement("button");
-            btn.innerText = "Download";
+            const dl = document.createElement("button");
+            dl.innerText = "DL";
 
-            btn.onclick = () => downloadVersion(v);
+            dl.onclick = () =>
+                download(v.uid, v.lid, v.version, item.title);
 
             row.appendChild(label);
-            row.appendChild(btn);
-
-            dropdown.appendChild(row);
+            row.appendChild(dl);
+            drop.appendChild(row);
         });
 
-        /* =========================
-           DOWNLOAD ALL
-        ========================= */
-        const allBtn = document.createElement("button");
-        allBtn.innerText = "⬇ Download All Versions";
-        allBtn.style.width = "100%";
-        allBtn.style.marginTop = "6px";
-
-        allBtn.onclick = async () => {
-            for (const v of group.versions) {
-                await downloadVersion(v);
-                await new Promise(r => setTimeout(r, 300));
-            }
-        };
-
-        box.appendChild(toggle);
-        box.appendChild(dropdown);
-        box.appendChild(allBtn);
-
+        box.appendChild(btn);
+        box.appendChild(drop);
         panel.appendChild(box);
-    }
+    });
 
     document.body.appendChild(panel);
 }
@@ -187,21 +156,26 @@ function createUI(groups) {
 ========================= */
 (async () => {
 
-    const userId = prompt("Enter User ID:");
+    const userId = prompt("User ID:");
     if (!userId) return;
 
     const levels = await getLevels(userId);
 
-    if (!levels.length) {
-        alert("No levels found");
-        return;
+    const result = [];
+
+    for (const lvl of levels) {
+        const versions = await scanVersions(lvl);
+
+        if (versions.length) {
+            result.push({
+                title: lvl.title,
+                versions
+            });
+        }
     }
 
-    const grouped = groupLevels(levels);
-
-    createUI(grouped);
+    createUI(result);
 
 })();
 
 })();
-
