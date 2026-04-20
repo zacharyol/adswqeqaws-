@@ -2,58 +2,31 @@
 
 if (!ctx) window.ctx = { log: console.log };
 
-ctx.log("📦 User Level Scanner Loaded");
+ctx.log("📦 Level Scanner (data_key system)");
 
-/* =========================
-   INPUT USER ID
-========================= */
 const userId = prompt("Enter User ID:");
-if (!userId) {
-    ctx.log("No User ID provided");
-    return;
-}
+if (!userId) return;
 
 /* =========================
-   GET USER INFO (optional check)
-========================= */
-try {
-    const userInfo = await fetch(
-        `https://api.slin.dev/grab/v1/get_user_info?user_id=${userId}`
-    ).then(r => r.json());
-
-    ctx.log("User: " + (userInfo?.username || "Unknown"));
-} catch {
-    ctx.log("User info fetch failed (continuing anyway)");
-}
-
-/* =========================
-   FETCH LEVEL LIST
+   FETCH LEVELS
 ========================= */
 ctx.log("Fetching levels...");
 
-let data;
+const res = await fetch(
+    `https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=${userId}`
+);
 
-try {
-    const res = await fetch(
-        `https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=${userId}`
-    );
+const levels = await res.json();
 
-    data = await res.json();
-
-} catch (e) {
-    ctx.log("Fetch error: " + e.message);
-    return;
-}
-
-if (!data || !data.levels || !data.levels.length) {
+if (!levels?.levels?.length) {
     ctx.log("No levels found");
     return;
 }
 
-ctx.log("Levels found: " + data.levels.length);
+ctx.log("Levels found: " + levels.levels.length);
 
 /* =========================
-   UI PANEL
+   UI
 ========================= */
 const panel = document.createElement("div");
 panel.style = `
@@ -69,36 +42,66 @@ font-family:monospace;
 z-index:999999999;
 padding:10px;
 border-radius:8px;
-box-shadow:0 0 12px black;
 `;
 
-panel.innerHTML = `<b>📁 User Levels</b><br><br>`;
+panel.innerHTML = `<b>📁 Levels</b><br><br>`;
 document.body.appendChild(panel);
 
 /* =========================
-   DOWNLOAD SINGLE LEVEL
+   GET DETAILS → EXTRACT NUMBER
 ========================= */
-async function downloadLevel(lvl) {
+async function getDownloadNumber(level) {
+
+    const data = await fetch(
+        `https://api.slin.dev/grab/v1/details/${userId}/${level.identifier}`
+    ).then(r => r.json());
+
+    const key = data.data_key;
+
+    if (!key) return null;
+
+    const prefix = `level_data:${userId}:${level.identifier}:`;
+
+    if (!key.startsWith(prefix)) return null;
+
+    return key.slice(prefix.length);
+}
+
+/* =========================
+   DOWNLOAD LEVEL
+========================= */
+async function downloadLevel(level) {
 
     try {
-        ctx.log("⬇ " + (lvl.name || "Unnamed"));
+        ctx.log("⬇ " + level.title);
 
-        const blob = await fetch(lvl.download_url).then(r => r.blob());
+        const number = await getDownloadNumber(level);
+
+        if (!number) {
+            ctx.log("❌ Missing download number");
+            return;
+        }
+
+        const blob = await fetch(
+            `https://api.slin.dev/grab/v1/download/${userId}/${level.identifier}/${number}`
+        ).then(r => r.blob());
 
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = (lvl.name || "level") + ".level";
+        a.download = (level.title || "level") + ".level";
         a.click();
 
+        ctx.log("✔ Done: " + level.title);
+
     } catch (e) {
-        ctx.log("❌ Failed: " + e.message);
+        ctx.log("❌ Error: " + e.message);
     }
 }
 
 /* =========================
    RENDER LIST
 ========================= */
-data.levels.forEach((lvl, i) => {
+levels.levels.forEach(level => {
 
     const row = document.createElement("div");
     row.style = `
@@ -108,18 +111,15 @@ data.levels.forEach((lvl, i) => {
         border-radius:6px;
         display:flex;
         justify-content:space-between;
-        align-items:center;
     `;
 
     row.innerHTML = `
-        <span style="font-size:12px;">
-            ${lvl.name || "Unnamed"}
-        </span>
+        <span style="font-size:12px;">${level.title}</span>
         <button>Download</button>
     `;
 
     row.querySelector("button").onclick = () => {
-        downloadLevel(lvl);
+        downloadLevel(level);
     };
 
     panel.appendChild(row);
@@ -128,21 +128,21 @@ data.levels.forEach((lvl, i) => {
 /* =========================
    DOWNLOAD ALL
 ========================= */
-const allBtn = document.createElement("button");
-allBtn.innerText = "⬇ Download ALL";
-allBtn.style = "width:100%;margin-top:10px;";
-panel.appendChild(allBtn);
+const all = document.createElement("button");
+all.innerText = "⬇ Download ALL";
+all.style = "width:100%;margin-top:10px;";
+panel.appendChild(all);
 
-allBtn.onclick = async () => {
+all.onclick = async () => {
 
     ctx.log("Starting bulk download...");
 
-    for (const lvl of data.levels) {
+    for (const lvl of levels.levels) {
         await downloadLevel(lvl);
-        await new Promise(r => setTimeout(r, 300)); // prevents rate spam
+        await new Promise(r => setTimeout(r, 300));
     }
 
-    ctx.log("✅ All downloads complete");
+    ctx.log("✅ All done");
 };
 
 })();
