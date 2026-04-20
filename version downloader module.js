@@ -1,13 +1,35 @@
 javascript:(async () => {
 
 const API = "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
+const DOWNLOAD = (uid, lid, v) =>
+    `https://api.slin.dev/grab/v1/download/${uid}/${lid}/${v}`;
 
 /* =========================
-   FETCH
+   FETCH LEVEL LIST
 ========================= */
 async function getLevels(userId) {
     const res = await fetch(API + userId);
-    return await res.json(); // <-- ARRAY (NOT .levels)
+    return await res.json();
+}
+
+/* =========================
+   PARSE SUB LEVELS FROM FILE
+========================= */
+async function extractSubLevels(uid, lid, version) {
+    try {
+        const res = await fetch(DOWNLOAD(uid, lid, version));
+        const blob = await res.blob();
+        const text = await blob.text();
+
+        const matches = [...text.matchAll(
+            /"triggerTargetSubLevel"\s*:\s*\{\s*"levelIdentifier"\s*:\s*"([^"]+)"/g
+        )];
+
+        return matches.map(m => m[1]);
+
+    } catch (e) {
+        return [];
+    }
 }
 
 /* =========================
@@ -34,7 +56,8 @@ function group(levels) {
                 title: lvl.title || lid,
                 uid,
                 lid,
-                maxVersion: version
+                maxVersion: version,
+                subLevels: new Set()
             };
         } else {
             if (version > map[key].maxVersion) {
@@ -47,20 +70,17 @@ function group(levels) {
 }
 
 /* =========================
-   DOWNLOAD
+   DOWNLOAD BUTTON
 ========================= */
-async function download(uid, lid, v, title) {
-
-    const res = await fetch(
-        `https://api.slin.dev/grab/v1/download/${uid}/${lid}/${v}`
-    );
-
-    const blob = await res.blob();
-
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${title}_v${v}.level`;
-    a.click();
+function download(uid, lid, v, title) {
+    fetch(DOWNLOAD(uid, lid, v))
+        .then(r => r.blob())
+        .then(blob => {
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${title}_v${v}.level`;
+            a.click();
+        });
 }
 
 /* =========================
@@ -74,7 +94,7 @@ function ui(data) {
         position: "fixed",
         right: "20px",
         top: "80px",
-        width: "360px",
+        width: "380px",
         maxHeight: "520px",
         overflowY: "auto",
         background: "#111",
@@ -85,7 +105,7 @@ function ui(data) {
         borderRadius: "10px"
     });
 
-    panel.innerHTML = "<b>📦 Version Downloader</b><br><br>";
+    panel.innerHTML = "<b>🧩 SUB LEVEL DOWNLOADER</b><br><br>";
 
     Object.values(data).forEach(item => {
 
@@ -101,36 +121,60 @@ function ui(data) {
 
         const drop = document.createElement("div");
         drop.style.display = "none";
+        drop.style.marginTop = "6px";
 
         btn.onclick = () => {
             drop.style.display = drop.style.display === "none" ? "block" : "none";
         };
 
         /* =========================
-           VERSIONS DOWN TO 1
+           SCAN ALL VERSIONS
         ========================= */
-        for (let v = item.maxVersion; v >= 1; v--) {
+        (async () => {
 
-            const row = document.createElement("div");
-            row.style.display = "flex";
-            row.style.justifyContent = "space-between";
-            row.style.margin = "4px 0";
+            for (let v = item.maxVersion; v >= 1; v--) {
 
-            row.innerHTML = `<span>Version ${v}</span>`;
+                const subs = await extractSubLevels(item.uid, item.lid, v);
 
-            const dl = document.createElement("button");
-            dl.innerText = "DL";
+                subs.forEach(s => item.subLevels.add(s));
 
-            dl.onclick = () =>
-                download(item.uid, item.lid, v, item.title);
+                const row = document.createElement("div");
+                row.style.display = "flex";
+                row.style.justifyContent = "space-between";
+                row.style.margin = "4px 0";
+                row.style.fontSize = "12px";
 
-            row.appendChild(dl);
-            drop.appendChild(row);
-        }
+                row.innerHTML = `
+                    <span>v${v} (${subs.length} sub)</span>
+                `;
+
+                const dl = document.createElement("button");
+                dl.innerText = "DL";
+
+                dl.onclick = () => download(item.uid, item.lid, v, item.title);
+
+                row.appendChild(dl);
+                drop.appendChild(row);
+            }
+
+            /* show collected sub levels */
+            if (item.subLevels.size > 0) {
+                const subBox = document.createElement("div");
+                subBox.style.marginTop = "8px";
+                subBox.style.fontSize = "11px";
+                subBox.style.color = "#0f0";
+
+                subBox.innerHTML =
+                    "<b>Sub Levels:</b><br>" +
+                    [...item.subLevels].map(x => "• " + x).join("<br>");
+
+                drop.appendChild(subBox);
+            }
+
+        })();
 
         box.appendChild(btn);
         box.appendChild(drop);
-
         panel.appendChild(box);
     });
 
@@ -147,10 +191,8 @@ function ui(data) {
 
     const levels = await getLevels(userId);
 
-    console.log("RAW LEVELS:", levels);
-
-    if (!Array.isArray(levels) || levels.length === 0) {
-        alert("No levels found (check API)");
+    if (!Array.isArray(levels) || !levels.length) {
+        alert("No levels found");
         return;
     }
 
