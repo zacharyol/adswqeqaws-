@@ -15,17 +15,24 @@ function styles() {
 
     const s = document.createElement("style");
     s.id = "ls_style";
-    s.innerHTML = `
-    #launcher { position:fixed; inset:0; background:#0b0b0b; color:#fff; font-family:monospace; display:flex; justify-content:center; align-items:center; z-index:999999999; }
-    #box { width:420px; padding:14px; background:#111; border-radius:10px; }
-    #barOuter { height:8px; background:#222; border-radius:6px; overflow:hidden; margin-top:10px; }
-    #barInner { height:100%; width:0%; background:white; transition:width .2s; }
-    #log { height:120px; overflow-y:auto; font-size:12px; margin-top:10px; }
-    #warn { position:fixed; inset:0; display:flex; justify-content:center; align-items:center; font-size:22px; animation:flash .3s infinite alternate; z-index:9999999999; }
-    @keyframes flash { 0%{background:black;color:red;} 100%{background:red;color:black;} }
-    button { margin-top:6px; width:100%; background:#222; color:white; border:none; padding:6px; cursor:pointer; }
-    textarea { width:100%; height:80px; background:#000; color:#0f0; margin-top:6px; }
-    `;
+    el.innerHTML = `
+<div id="box">
+    <div>Launcher (${config.version || "?"})</div>
+
+    <div id="status">Ready</div>
+
+    <div id="barOuter"><div id="barInner"></div></div>
+
+    <div id="log"></div>
+
+    <div id="modules" style="margin-top:10px;"></div>
+
+    <button id="runMods">Run Modules</button>
+    <button id="addMod">Add Local Module</button>
+
+    <textarea id="codeInput" placeholder="// paste JS module here"></textarea>
+</div>
+`;
     document.head.appendChild(s);
 }
 
