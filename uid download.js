@@ -1,70 +1,21 @@
-(async () => {
+javascript:(() => {
 
-if (!ctx) window.ctx = { log: console.log };
-
-ctx.log("📦 Level Scanner (data_key system)");
-
-const userId = prompt("Enter User ID:");
-if (!userId) return;
+const API = "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
 
 /* =========================
-   FETCH LEVELS
+   LOG SYSTEM (SAFE)
 ========================= */
-ctx.log("Fetching levels...");
-
-const res = await fetch(
-    `https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=${userId}`
-);
-
-const levels = await res.json();
-
-if (!levels?.levels?.length) {
-    ctx.log("No levels found");
-    return;
-}
-
-ctx.log("Levels found: " + levels.levels.length);
+const log = (m) => {
+    console.log("[LevelModule]", m);
+};
 
 /* =========================
-   UI
+   GET USER LEVELS
 ========================= */
-const panel = document.createElement("div");
-panel.style = `
-position:fixed;
-right:20px;
-top:80px;
-width:340px;
-max-height:450px;
-overflow:auto;
-background:#111;
-color:#fff;
-font-family:monospace;
-z-index:999999999;
-padding:10px;
-border-radius:8px;
-`;
-
-panel.innerHTML = `<b>📁 Levels</b><br><br>`;
-document.body.appendChild(panel);
-
-/* =========================
-   GET DETAILS → EXTRACT NUMBER
-========================= */
-async function getDownloadNumber(level) {
-
-    const data = await fetch(
-        `https://api.slin.dev/grab/v1/details/${userId}/${level.identifier}`
-    ).then(r => r.json());
-
-    const key = data.data_key;
-
-    if (!key) return null;
-
-    const prefix = `level_data:${userId}:${level.identifier}:`;
-
-    if (!key.startsWith(prefix)) return null;
-
-    return key.slice(prefix.length);
+async function getLevels(userId) {
+    const res = await fetch(API + userId);
+    if (!res.ok) throw new Error("Failed fetch");
+    return await res.json();
 }
 
 /* =========================
@@ -72,77 +23,115 @@ async function getDownloadNumber(level) {
 ========================= */
 async function downloadLevel(level) {
 
-    try {
-        ctx.log("⬇ " + level.title);
+    const parts = level.data_key.split(":");
+    const userId = parts[1];
+    const levelId = parts[2];
+    const number = parts[3];
 
-        const number = await getDownloadNumber(level);
+    const url = `https://api.slin.dev/grab/v1/download/${userId}/${levelId}/${number}`;
 
-        if (!number) {
-            ctx.log("❌ Missing download number");
-            return;
-        }
+    const blob = await fetch(url).then(r => r.blob());
 
-        const blob = await fetch(
-            `https://api.slin.dev/grab/v1/download/${userId}/${level.identifier}/${number}`
-        ).then(r => r.blob());
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${level.title || levelId}.level`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
 
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = (level.title || "level") + ".level";
-        a.click();
-
-        ctx.log("✔ Done: " + level.title);
-
-    } catch (e) {
-        ctx.log("❌ Error: " + e.message);
-    }
+    log("Downloaded: " + (level.title || levelId));
 }
 
 /* =========================
-   RENDER LIST
+   UI PANEL
 ========================= */
-levels.levels.forEach(level => {
+function createUI(levels, userId) {
 
-    const row = document.createElement("div");
-    row.style = `
-        margin:5px 0;
-        padding:6px;
-        background:#222;
-        border-radius:6px;
-        display:flex;
-        justify-content:space-between;
-    `;
+    const panel = document.createElement("div");
 
-    row.innerHTML = `
-        <span style="font-size:12px;">${level.title}</span>
-        <button>Download</button>
-    `;
+    Object.assign(panel.style, {
+        position: "fixed",
+        right: "20px",
+        top: "80px",
+        width: "320px",
+        maxHeight: "500px",
+        overflow: "auto",
+        background: "#111",
+        color: "#fff",
+        fontFamily: "monospace",
+        padding: "10px",
+        borderRadius: "8px",
+        zIndex: 999999999
+    });
 
-    row.querySelector("button").onclick = () => {
-        downloadLevel(level);
+    panel.innerHTML = `<b>📦 User Levels</b><br><br>`;
+
+    /* DOWNLOAD ALL BUTTON */
+    const allBtn = document.createElement("button");
+    allBtn.innerText = "⬇ Download ALL";
+    allBtn.style.width = "100%";
+
+    allBtn.onclick = async () => {
+        for (const lvl of levels) {
+            await downloadLevel(lvl);
+            await new Promise(r => setTimeout(r, 300));
+        }
+        alert("Done downloading all!");
     };
 
-    panel.appendChild(row);
-});
+    panel.appendChild(allBtn);
+
+    /* LIST LEVELS */
+    levels.forEach((lvl) => {
+
+        const row = document.createElement("div");
+        row.style = `
+            margin-top:6px;
+            padding:6px;
+            background:#222;
+            border-radius:6px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:6px;
+        `;
+
+        row.innerHTML = `
+            <span style="font-size:12px;">${lvl.title}</span>
+        `;
+
+        const btn = document.createElement("button");
+        btn.innerText = "DL";
+
+        btn.onclick = () => downloadLevel(lvl);
+
+        row.appendChild(btn);
+        panel.appendChild(row);
+    });
+
+    document.body.appendChild(panel);
+}
 
 /* =========================
-   DOWNLOAD ALL
+   MAIN
 ========================= */
-const all = document.createElement("button");
-all.innerText = "⬇ Download ALL";
-all.style = "width:100%;margin-top:10px;";
-panel.appendChild(all);
+(async () => {
 
-all.onclick = async () => {
+    const userId = prompt("Enter User ID:");
+    if (!userId) return alert("No user id");
 
-    ctx.log("Starting bulk download...");
+    log("Fetching levels...");
 
-    for (const lvl of levels.levels) {
-        await downloadLevel(lvl);
-        await new Promise(r => setTimeout(r, 300));
+    const data = await getLevels(userId);
+
+    if (!data?.levels?.length) {
+        return alert("No levels found");
     }
 
-    ctx.log("✅ All done");
-};
+    log("Loaded " + data.levels.length + " levels");
+
+    createUI(data.levels, userId);
+
+})();
 
 })();
