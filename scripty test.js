@@ -1,93 +1,109 @@
-(() => {
+javascript:(() => {
 
 const CONFIG_API = "https://api.github.com/repos/zacharyol/adswqeqaws-/contents/config.json";
 
-/* RESET */
+/* =========================
+   💀 RESET
+========================= */
 function reset() {
     document.getElementById("launcher")?.remove();
-    document.getElementById("warn")?.remove();
-    document.querySelectorAll("script[data-launcher]").forEach(s => s.remove());
 }
 
-/* STYLES */
+/* =========================
+   🎨 STYLES
+========================= */
 function styles() {
     if (document.getElementById("ls_style")) return;
 
     const s = document.createElement("style");
     s.id = "ls_style";
-    el.innerHTML = `
-<div id="box">
-    <div>Launcher (${config.version || "?"})</div>
+    s.innerHTML = `
+    #launcher {
+        position:fixed;
+        top:100px;
+        left:100px;
+        width:420px;
+        background:#0b0b0b;
+        color:#fff;
+        font-family:monospace;
+        z-index:999999999;
+        border-radius:10px;
+        box-shadow:0 0 20px black;
+    }
 
-    <div id="status">Ready</div>
+    #header {
+        padding:10px;
+        background:#111;
+        cursor:move;
+        border-bottom:1px solid #222;
+    }
 
-    <div id="barOuter"><div id="barInner"></div></div>
+    #box { padding:10px; }
 
-    <div id="log"></div>
+    .module {
+        background:#1a1a1a;
+        margin-top:6px;
+        padding:6px;
+        border-radius:6px;
+    }
 
-    <div id="modules" style="margin-top:10px;"></div>
+    button {
+        margin-left:4px;
+        background:#222;
+        color:white;
+        border:none;
+        padding:4px;
+        cursor:pointer;
+    }
 
-    <button id="runMods">Run Modules</button>
-    <button id="addMod">Add Local Module</button>
-
-    <textarea id="codeInput" placeholder="// paste JS module here"></textarea>
-</div>
-`;
+    textarea {
+        width:100%;
+        height:60px;
+        background:#000;
+        color:#0f0;
+        margin-top:6px;
+    }
+    `;
     document.head.appendChild(s);
 }
 
-/* CONFIG */
+/* =========================
+   📦 CONFIG
+========================= */
 function getConfig() {
     return new Promise(resolve => {
         const xhr = new XMLHttpRequest();
         xhr.open("GET", CONFIG_API);
-
         xhr.onload = () => {
             try {
                 const data = JSON.parse(xhr.responseText);
-                const json = JSON.parse(atob(data.content));
-                resolve(json);
-            } catch {
-                resolve({});
-            }
+                resolve(JSON.parse(atob(data.content)));
+            } catch { resolve({}); }
         };
-
         xhr.onerror = () => resolve({});
         xhr.send();
     });
 }
 
-/* WARNING */
-function warning(msg) {
-    return new Promise(resolve => {
-        const w = document.createElement("div");
-        w.id = "warn";
-        w.innerText = "⚠ " + msg;
-        document.body.appendChild(w);
-        setTimeout(() => {
-            w.remove();
-            resolve();
-        }, 3000);
-    });
-}
-
-/* LOCAL MODULES */
+/* =========================
+   💾 LOCAL STORAGE
+========================= */
 function getLocalModules() {
     try {
         return JSON.parse(localStorage.getItem("launcher_modules")) || [];
-    } catch {
-        return [];
-    }
+    } catch { return []; }
 }
 
-function saveLocalModule(code) {
-    const mods = getLocalModules();
-    mods.push({ name: "Local " + (mods.length + 1), code });
+function saveLocalModules(mods) {
     localStorage.setItem("launcher_modules", JSON.stringify(mods));
 }
 
-/* RUN MODULE */
+/* =========================
+   ⚡ RUN MODULE
+========================= */
 async function runModule(mod, ctx, log) {
+    if (!mod.enabled) return;
+
     try {
         log("▶ " + mod.name);
 
@@ -107,34 +123,44 @@ async function runModule(mod, ctx, log) {
     }
 }
 
-/* UI */
+/* =========================
+   🧱 UI
+========================= */
 function ui(config) {
+
     const el = document.createElement("div");
     el.id = "launcher";
 
     el.innerHTML = `
-        <div id="box">
-            <div>Launcher (${config.version || "?"})</div>
-            <div id="status">Ready</div>
-            <div id="barOuter"><div id="barInner"></div></div>
-            <div id="log"></div>
-            <button id="runMods">Run Modules</button>
-            <button id="addMod">Add Local Module</button>
-            <textarea id="codeInput" placeholder="// paste JS module here"></textarea>
-        </div>
+    <div id="header">Launcher (${config.version || "?"})</div>
+    <div id="box">
+        <div id="modules"></div>
+
+        <button id="runAll">Run Enabled</button>
+
+        <textarea id="codeInput" placeholder="// module code"></textarea>
+        <button id="add">Add Module</button>
+
+        <div id="log" style="height:100px;overflow:auto;margin-top:6px;"></div>
+    </div>
     `;
 
     document.body.appendChild(el);
 
     return {
+        root: el,
+        modules: el.querySelector("#modules"),
+        runAll: el.querySelector("#runAll"),
+        add: el.querySelector("#add"),
+        code: el.querySelector("#codeInput"),
         log: el.querySelector("#log"),
-        runBtn: el.querySelector("#runMods"),
-        addBtn: el.querySelector("#addMod"),
-        codeInput: el.querySelector("#codeInput")
+        header: el.querySelector("#header")
     };
 }
 
-/* LOGGER */
+/* =========================
+   📟 LOG
+========================= */
 function logger(el) {
     return t => {
         const d = document.createElement("div");
@@ -144,7 +170,83 @@ function logger(el) {
     };
 }
 
-/* MAIN */
+/* =========================
+   🎛 MODULE LIST
+========================= */
+function renderModules(UI, mods, ctx, log) {
+
+    UI.modules.innerHTML = "";
+
+    mods.forEach((m, i) => {
+
+        const div = document.createElement("div");
+        div.className = "module";
+
+        div.innerHTML = `
+        <b>${m.name}</b>
+        <div>
+            <button data-act="toggle">${m.enabled ? "ON" : "OFF"}</button>
+            <button data-act="run">Run</button>
+            <button data-act="rename">Rename</button>
+            ${m.local ? '<button data-act="delete">Delete</button>' : ''}
+        </div>
+        `;
+
+        div.onclick = async (e) => {
+            const act = e.target.dataset.act;
+            if (!act) return;
+
+            if (act === "toggle") {
+                m.enabled = !m.enabled;
+            }
+
+            if (act === "run") {
+                await runModule(m, ctx, log);
+            }
+
+            if (act === "rename") {
+                const name = prompt("New name:", m.name);
+                if (name) m.name = name;
+            }
+
+            if (act === "delete") {
+                mods.splice(i, 1);
+            }
+
+            saveLocalModules(mods.filter(x => x.local));
+            renderModules(UI, mods, ctx, log);
+        };
+
+        UI.modules.appendChild(div);
+    });
+}
+
+/* =========================
+   🖱 DRAG
+========================= */
+function drag(el, handle) {
+    let x=0,y=0;
+
+    handle.onmousedown = e => {
+        x=e.clientX;
+        y=e.clientY;
+
+        document.onmousemove = e2 => {
+            el.style.left = (el.offsetLeft + e2.clientX - x) + "px";
+            el.style.top = (el.offsetTop + e2.clientY - y) + "px";
+            x=e2.clientX;
+            y=e2.clientY;
+        };
+
+        document.onmouseup = () => {
+            document.onmousemove = null;
+        };
+    };
+}
+
+/* =========================
+   🚀 MAIN
+========================= */
 (async () => {
 
     reset();
@@ -152,39 +254,41 @@ function logger(el) {
 
     const config = await getConfig();
 
-    if (config.showWarning) {
-        await warning(config.warningMessage);
-    }
-
     const UI = ui(config);
     const log = logger(UI.log);
 
     const ctx = { log, config, page: window };
 
-    UI.runBtn.onclick = async () => {
-        const allMods = [
-            ...(config.modules || []),
-            ...getLocalModules()
-        ];
+    let mods = [
+        ...(config.modules || []).map(m => ({...m, enabled:true, local:false})),
+        ...getLocalModules().map(m => ({...m, local:true}))
+    ];
 
-        log("Running " + allMods.length + " modules...");
+    renderModules(UI, mods, ctx, log);
 
-        for (const m of allMods) {
+    UI.runAll.onclick = async () => {
+        for (const m of mods) {
             await runModule(m, ctx, log);
         }
-
-        log("All modules finished");
     };
 
-    UI.addBtn.onclick = () => {
-        const code = UI.codeInput.value.trim();
+    UI.add.onclick = () => {
+        const code = UI.code.value.trim();
         if (!code) return;
 
-        saveLocalModule(code);
-        log("Saved local module");
-        UI.codeInput.value = "";
+        const newMod = {
+            name: "Local " + Date.now(),
+            code,
+            enabled: true,
+            local: true
+        };
+
+        mods.push(newMod);
+        saveLocalModules(mods.filter(x => x.local));
+        renderModules(UI, mods, ctx, log);
+        UI.code.value = "";
     };
 
-})();
+    drag(UI.root, UI.header);
 
 })();
