@@ -1,154 +1,159 @@
 javascript:(() => {
 
 const LIST_API = "https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=";
+const DETAILS_API = (u, l) =>
+  `https://api.slin.dev/grab/v1/details/${u}/${l}`;
 const DOWNLOAD_API = (u, l, v) =>
-    `https://api.slin.dev/grab/v1/download/${u}/${l}/${v}`;
+  `https://api.slin.dev/grab/v1/download/${u}/${l}/${v}`;
 
 /* =========================
-   FETCH BASE LEVEL LIST
+   FETCH LEVELS
 ========================= */
 async function getLevels(userId) {
-    const res = await fetch(LIST_API + userId);
-    const data = await res.json();
-    return data.levels || [];
+  const res = await fetch(LIST_API + userId);
+  const data = await res.json();
+  return data.levels || [];
 }
 
 /* =========================
-   FIND MAX VERSION PER LEVEL
-   (we detect by scanning downwards)
+   GET REAL START VERSION
 ========================= */
-async function scanVersions(level) {
+async function getStartVersion(uid, lid) {
+  const res = await fetch(DETAILS_API(uid, lid));
+  const data = await res.json();
 
-    const parts = level.data_key.split(":");
-    const uid = parts[1];
-    const lid = parts[2];
+  const key = data.data_key;
+  if (!key) return null;
 
-    const versions = [];
+  const parts = key.split(":");
+  return {
+    uid: parts[1],
+    lid: parts[2],
+    start: Number(parts[3]) || 1,
+    title: data.title || lid
+  };
+}
 
-    // start from known version if exists
-    let v = Number(parts[3] || 10);
+/* =========================
+   WALK DOWN VERSIONS
+========================= */
+async function collectVersions(uid, lid, start, title) {
 
-    while (v > 0) {
-        try {
-            const res = await fetch(DOWNLOAD_API(uid, lid, v));
+  const versions = [];
 
-            if (!res.ok) break;
+  for (let v = start; v >= 1; v--) {
+    try {
+      const res = await fetch(DOWNLOAD_API(uid, lid, v));
 
-            versions.push({
-                version: v,
-                uid,
-                lid,
-                title: level.title
-            });
+      if (!res.ok) break;
 
-        } catch {
-            break;
-        }
+      versions.push({ uid, lid, version: v, title });
 
-        v--;
+    } catch {
+      break;
     }
+  }
 
-    return versions;
+  return versions;
 }
 
 /* =========================
    DOWNLOAD
 ========================= */
-async function download(uid, lid, v, title) {
+async function download(v) {
+  const res = await fetch(DOWNLOAD_API(v.uid, v.lid, v.version));
+  const blob = await res.blob();
 
-    const res = await fetch(DOWNLOAD_API(uid, lid, v));
-    const blob = await res.blob();
-
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${title}_v${v}.level`;
-    a.click();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${v.title}_v${v.version}.level`;
+  a.click();
 }
 
 /* =========================
    UI
 ========================= */
-function createUI(data) {
+function UI(data) {
 
-    const panel = document.createElement("div");
+  const panel = document.createElement("div");
 
-    Object.assign(panel.style, {
-        position: "fixed",
-        right: "20px",
-        top: "80px",
-        width: "360px",
-        maxHeight: "520px",
-        overflowY: "auto",
-        background: "#111",
-        color: "#fff",
-        fontFamily: "monospace",
-        padding: "10px",
-        zIndex: 999999999,
-        borderRadius: "10px"
+  Object.assign(panel.style, {
+    position: "fixed",
+    right: "20px",
+    top: "80px",
+    width: "360px",
+    maxHeight: "520px",
+    overflowY: "auto",
+    background: "#111",
+    color: "#fff",
+    fontFamily: "monospace",
+    padding: "10px",
+    zIndex: 999999999,
+    borderRadius: "10px"
+  });
+
+  panel.innerHTML = `<b>📦 Version Chain Downloader</b><br><br>`;
+
+  data.forEach(item => {
+
+    const box = document.createElement("div");
+    box.style.marginBottom = "10px";
+    box.style.background = "#222";
+    box.style.padding = "6px";
+    box.style.borderRadius = "6px";
+
+    const btn = document.createElement("button");
+    btn.innerText = item.title + " ▼";
+    btn.style.width = "100%";
+
+    const drop = document.createElement("div");
+    drop.style.display = "none";
+    drop.style.marginTop = "5px";
+
+    btn.onclick = () => {
+      drop.style.display = drop.style.display === "none" ? "block" : "none";
+    };
+
+    const all = document.createElement("button");
+    all.innerText = "Download All Versions";
+    all.style.width = "100%";
+
+    all.onclick = async () => {
+      for (const v of item.versions) {
+        await download(v);
+        await new Promise(r => setTimeout(r, 250));
+      }
+    };
+
+    drop.appendChild(all);
+
+    item.versions.forEach(v => {
+
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.margin = "4px 0";
+
+      const label = document.createElement("span");
+      label.innerText = "Version " + v.version;
+
+      const dl = document.createElement("button");
+      dl.innerText = "DL";
+
+      dl.onclick = () => download(v);
+
+      row.appendChild(label);
+      row.appendChild(dl);
+
+      drop.appendChild(row);
     });
 
-    panel.innerHTML = `<b>📦 Version Scanner</b><br><br>`;
+    box.appendChild(btn);
+    box.appendChild(drop);
+    panel.appendChild(box);
+  });
 
-    data.forEach(item => {
-
-        const box = document.createElement("div");
-        box.style.marginBottom = "10px";
-        box.style.background = "#222";
-        box.style.padding = "6px";
-        box.style.borderRadius = "6px";
-
-        const btn = document.createElement("button");
-        btn.innerText = item.title + " ▼";
-        btn.style.width = "100%";
-
-        const drop = document.createElement("div");
-        drop.style.display = "none";
-        drop.style.marginTop = "5px";
-
-        btn.onclick = () => {
-            drop.style.display = drop.style.display === "none" ? "block" : "none";
-        };
-
-        const allBtn = document.createElement("button");
-        allBtn.innerText = "Download All Versions";
-        allBtn.style.width = "100%";
-
-        allBtn.onclick = async () => {
-            for (const v of item.versions) {
-                await download(v.uid, v.lid, v.version, item.title);
-                await new Promise(r => setTimeout(r, 250));
-            }
-        };
-
-        drop.appendChild(allBtn);
-
-        item.versions.forEach(v => {
-
-            const row = document.createElement("div");
-            row.style.display = "flex";
-            row.style.justifyContent = "space-between";
-            row.style.margin = "4px 0";
-
-            const label = document.createElement("span");
-            label.innerText = "Version " + v.version;
-
-            const dl = document.createElement("button");
-            dl.innerText = "DL";
-
-            dl.onclick = () =>
-                download(v.uid, v.lid, v.version, item.title);
-
-            row.appendChild(label);
-            row.appendChild(dl);
-            drop.appendChild(row);
-        });
-
-        box.appendChild(btn);
-        box.appendChild(drop);
-        panel.appendChild(box);
-    });
-
-    document.body.appendChild(panel);
+  document.body.appendChild(panel);
 }
 
 /* =========================
@@ -156,25 +161,38 @@ function createUI(data) {
 ========================= */
 (async () => {
 
-    const userId = prompt("User ID:");
-    if (!userId) return;
+  const userId = prompt("User ID:");
+  if (!userId) return;
 
-    const levels = await getLevels(userId);
+  const levels = await getLevels(userId);
 
-    const result = [];
+  const output = [];
 
-    for (const lvl of levels) {
-        const versions = await scanVersions(lvl);
+  for (const lvl of levels) {
 
-        if (versions.length) {
-            result.push({
-                title: lvl.title,
-                versions
-            });
-        }
+    const base = lvl.identifier.split(":");
+    const uid = base[0];
+    const lid = base[1];
+
+    const startInfo = await getStartVersion(uid, lid);
+    if (!startInfo) continue;
+
+    const versions = await collectVersions(
+      startInfo.uid,
+      startInfo.lid,
+      startInfo.start,
+      startInfo.title
+    );
+
+    if (versions.length) {
+      output.push({
+        title: startInfo.title,
+        versions
+      });
     }
+  }
 
-    createUI(result);
+  UI(output);
 
 })();
 
