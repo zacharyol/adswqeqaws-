@@ -1,127 +1,90 @@
 (async () => {
 
+if (!ctx) window.ctx = { log: console.log };
+
 ctx.log("📦 Level Downloader Loaded");
 
-const userId = prompt("Enter User ID:");
-if (!userId) {
-    ctx.log("No User ID provided");
+/* =========================
+   VALIDATION
+========================= */
+if (location.hostname !== "grabvr.quest") {
+    alert("Use this in the level viewer (grabvr.quest)");
     return;
 }
 
-ctx.log("Fetching levels...");
+const levelParam = new URLSearchParams(location.search).get("level");
 
-let data;
-try {
-    const res = await fetch(
-        `https://api.slin.dev/grab/v1/list?max_format_version=21&user_id=${userId}`
-    );
-    data = await res.json();
-} catch (e) {
-    ctx.log("Fetch error: " + e.message);
+if (!levelParam) {
+    alert("No level ID found in URL.");
     return;
 }
 
-if (!data?.levels?.length) {
-    ctx.log("No levels found");
-    return;
-}
+const [userid, levelid] = levelParam.split(":");
 
-ctx.log(`Found ${data.levels.length} levels`);
+ctx.log("Target: " + userid + " / " + levelid);
 
 /* =========================
-   UI PANEL
+   EXTRACT DOWNLOAD NUMBER
 ========================= */
-const panel = document.createElement("div");
-panel.style = `
-position:fixed;
-right:20px;
-top:80px;
-width:340px;
-max-height:450px;
-overflow:auto;
-background:#111;
-color:#fff;
-font-family:monospace;
-z-index:999999999;
-padding:10px;
-border-radius:8px;
-box-shadow:0 0 12px black;
-`;
+function extractDownloadNumber(data) {
+    const key = data.data_key;
+    if (!key) return null;
 
-panel.innerHTML = `<b>📁 Level Downloader</b><br><br>`;
-document.body.appendChild(panel);
+    const prefix = `level_data:${userid}:${levelid}:`;
+
+    if (!key.startsWith(prefix)) return null;
+
+    return key.slice(prefix.length);
+}
 
 /* =========================
    DOWNLOAD FUNCTION
 ========================= */
-async function downloadLevel(lvl) {
-    try {
-        ctx.log("⬇ Downloading: " + (lvl.name || "Unnamed"));
+async function downloadLevelFile(number) {
+    const res = await fetch(
+        `https://api.slin.dev/grab/v1/download/${userid}/${levelid}/${number}`
+    );
 
-        const blob = await fetch(lvl.download_url).then(r => r.blob());
-
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = (lvl.name || "level") + ".level";
-        a.click();
-
-        ctx.log("✔ Done: " + (lvl.name || "Unnamed"));
-
-    } catch (e) {
-        ctx.log("❌ Failed: " + e.message);
+    if (!res.ok) {
+        throw new Error(res.status + " " + res.statusText);
     }
+
+    return await res.blob();
 }
 
 /* =========================
-   RENDER LIST
+   FETCH DETAILS
 ========================= */
-data.levels.forEach((lvl, i) => {
+try {
 
-    const row = document.createElement("div");
-    row.style = `
-        margin:5px 0;
-        padding:6px;
-        background:#222;
-        border-radius:6px;
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        gap:5px;
-    `;
+    const data = await fetch(
+        `https://api.slin.dev/grab/v1/details/${userid}/${levelid}`
+    ).then(r => r.json());
 
-    row.innerHTML = `
-        <span style="font-size:12px;">
-            ${lvl.name || "Unnamed"}
-        </span>
+    const number = extractDownloadNumber(data);
 
-        <button id="dl_${i}">Download</button>
-    `;
-
-    panel.appendChild(row);
-
-    row.querySelector("button").onclick = () => {
-        downloadLevel(lvl);
-    };
-});
-
-/* =========================
-   ACTION BUTTONS
-========================= */
-
-const btnAll = document.createElement("button");
-btnAll.innerText = "⬇ Download ALL";
-btnAll.style = "width:100%;margin-top:10px;";
-panel.appendChild(btnAll);
-
-btnAll.onclick = async () => {
-    ctx.log("Starting bulk download...");
-
-    for (const lvl of data.levels) {
-        await downloadLevel(lvl);
-        await new Promise(r => setTimeout(r, 400)); // prevents spam
+    if (!number) {
+        alert("Failed to get download number.");
+        return;
     }
 
-    ctx.log("✅ All downloads complete");
-};
+    ctx.log("Downloading...");
+
+    const blob = await downloadLevelFile(number);
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = levelid + ".level";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    ctx.log("✔ Download complete");
+
+} catch (err) {
+    console.error(err);
+    alert("Error: " + err.message);
+    ctx.log("❌ Failed: " + err.message);
+}
 
 })();
