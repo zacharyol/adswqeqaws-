@@ -105,7 +105,7 @@ function ui(data) {
         borderRadius: "10px"
     });
 
-    panel.innerHTML = "<b>🧩 SUB LEVEL DOWNLOADER</b><br><br>";
+    panel.innerHTML = "<b>🧩 version LEVEL DOWNLOADER</b><br><br>";
 
     Object.values(data).forEach(item => {
 
